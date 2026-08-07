@@ -1,0 +1,1735 @@
+
+import io
+import hmac
+import uuid
+from datetime import datetime, timezone
+
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import streamlit as st
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib import colors
+from supabase import Client, create_client
+
+st.set_page_config(
+    page_title="PDP Control Center",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+BUCKET = "evidencias-ots"
+
+st.markdown("""
+<style>
+[data-testid="stSidebar"] {background:#082d55;}
+[data-testid="stSidebar"] * {color:white;}
+[data-testid="stMetric"] {
+    background:#fff;border:1px solid #e5e7eb;padding:14px;
+    border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.05);
+}
+.block-container {padding-top:1.15rem;}
+h1,h2,h3 {color:#082d55;}
+</style>
+""", unsafe_allow_html=True)
+
+
+def load_users() -> dict:
+    """Carga usuarios y roles desde Streamlit Secrets."""
+    users = {}
+
+    try:
+        users_section = st.secrets.get("users", {})
+        for username in users_section:
+            record = users_section[username]
+            users[str(username)] = {
+                "password": str(record.get("password", "")),
+                "role": str(record.get("role", "reporter")).lower(),
+                "name": str(record.get("name", username)),
+            }
+    except Exception:
+        users = {}
+
+    # Compatibilidad con la configuración anterior.
+    if not users:
+        legacy_username = st.secrets.get("auth", {}).get("username", "Jose")
+        legacy_password = st.secrets.get("auth", {}).get("password", "Mainin2026")
+        users[str(legacy_username)] = {
+            "password": str(legacy_password),
+            "role": "admin",
+            "name": str(legacy_username),
+        }
+
+    return users
+
+
+def authenticate() -> bool:
+    if st.session_state.get("authenticated"):
+        return True
+
+    users = load_users()
+
+    st.markdown("""
+    <div style="max-width:540px;margin:70px auto 12px auto;padding:42px 35px;
+    background:#fff;border-radius:18px;border-top:8px solid #f5b700;
+    box-shadow:0 10px 35px rgba(0,0,0,.10);text-align:center;">
+      <div style="font-size:34px;font-weight:800;color:#082d55;">PDP CONTROL CENTER</div>
+      <div style="font-size:18px;color:#667085;margin-top:8px;">
+        Control y seguimiento de órdenes de trabajo
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    _, center, _ = st.columns([1, 1.1, 1])
+    with center:
+        with st.form("login"):
+            username = st.text_input("Usuario")
+            password = st.text_input("Contraseña", type="password")
+            submit = st.form_submit_button(
+                "INGRESAR",
+                type="primary",
+                use_container_width=True,
+            )
+
+        if submit:
+            account = users.get(username)
+            if account and hmac.compare_digest(password, account["password"]):
+                st.session_state.authenticated = True
+                st.session_state.username = username
+                st.session_state.display_name = account["name"]
+                st.session_state.role = account["role"]
+                st.rerun()
+            else:
+                st.error("Usuario o contraseña incorrectos.")
+
+    return False
+
+
+if not authenticate():
+    st.stop()
+
+
+@st.cache_resource
+def get_supabase() -> Client:
+    try:
+        return create_client(
+            st.secrets["supabase"]["url"],
+            st.secrets["supabase"]["key"],
+        )
+    except Exception:
+        st.error("Falta configurar Supabase en los Secrets de Streamlit.")
+        st.stop()
+
+
+supabase = get_supabase()
+
+
+@st.cache_resource
+def get_supabase_admin() -> Client:
+    """
+    Cliente administrativo usado únicamente para reiniciar e importar una PDP.
+    La Secret Key se almacena en Streamlit Secrets y nunca en GitHub.
+    """
+    try:
+        admin_url = st.secrets["supabase"]["url"]
+        admin_key = st.secrets["supabase_admin"]["key"]
+        return create_client(admin_url, admin_key)
+    except Exception:
+        return None
+
+
+supabase_admin = get_supabase_admin()
+
+
+@st.cache_data(ttl=20)
+def read_table(name: str) -> pd.DataFrame:
+    result = supabase.table(name).select("*").execute()
+    rows = result.data or []
+    return pd.DataFrame(rows)
+
+
+def upload_evidence(file, ot: str, activity_id: str) -> str:
+    ext = file.name.rsplit(".", 1)[-1].lower() if "." in file.name else "jpg"
+    safe_ot = "".join(ch for ch in ot if ch.isalnum() or ch in "-_")
+    filename = f"{datetime.now(timezone.utc):%Y%m%d_%H%M%S}_{uuid.uuid4().hex[:10]}.{ext}"
+    path = f"{safe_ot}/{activity_id}/{filename}"
+    supabase.storage.from_(BUCKET).upload(
+        path=path,
+        file=file.getvalue(),
+        file_options={"content-type": file.type or "image/jpeg", "upsert": "false"},
+    )
+    return supabase.storage.from_(BUCKET).get_public_url(path)
+
+
+def invalidate():
+    read_table.clear()
+
+
+def load_model():
+    ots = read_table("ots")
+    activities = read_table("actividades")
+    progress = read_table("avances_actividad")
+
+    if not ots.empty and "ot" in ots.columns:
+        ots["ot"] = ots["ot"].astype(str)
+    if not activities.empty and "codigo_actividad" in activities.columns:
+        activities["codigo_actividad"] = activities["codigo_actividad"].astype(str)
+
+    if not progress.empty and "fecha_registro" in progress.columns:
+        progress["fecha_registro"] = pd.to_datetime(
+            progress["fecha_registro"], errors="coerce", utc=True
+        ).dt.tz_convert("America/Lima")
+
+    return ots, activities, progress
+
+
+def latest_progress(progress: pd.DataFrame) -> pd.DataFrame:
+    if progress.empty:
+        return pd.DataFrame(columns=["actividad_id", "avance"])
+    return (
+        progress.sort_values("fecha_registro")
+        .groupby("actividad_id", as_index=False)
+        .tail(1)
+    )
+
+
+def build_activity_status(activities: pd.DataFrame, progress: pd.DataFrame) -> pd.DataFrame:
+    if activities.empty:
+        return activities.copy()
+
+    latest = latest_progress(progress)
+    if latest.empty:
+        result = activities.copy()
+        result["avance_real"] = 0.0
+    else:
+        result = activities.merge(
+            latest[["actividad_id", "avance", "descripcion_avance", "observaciones", "fecha_registro"]],
+            left_on="id",
+            right_on="actividad_id",
+            how="left",
+        )
+        result["avance_real"] = pd.to_numeric(result["avance"], errors="coerce").fillna(0)
+
+    result["peso"] = pd.to_numeric(result.get("peso", 1), errors="coerce").fillna(1)
+    return result
+
+
+def weighted_progress(activity_status: pd.DataFrame) -> float:
+    if activity_status.empty:
+        return 0.0
+    denominator = activity_status["peso"].sum()
+    if denominator <= 0:
+        return float(activity_status["avance_real"].mean())
+    return float(
+        (activity_status["avance_real"] * activity_status["peso"]).sum() / denominator
+    )
+
+
+def build_s_curve(
+    activities: pd.DataFrame,
+    progress: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Curva S por promedio de avance de TODAS las actividades.
+
+    Eje temporal:
+    - inicio exacto = menor inicio_plan;
+    - cortes intermedios = 00:00, 07:00, 14:00 y 19:00;
+    - fin exacto = mayor fin_plan.
+
+    PLAN:
+    Para cada actividad calcula el porcentaje planificado esperado según el
+    tiempo transcurrido entre inicio_plan y fin_plan. El PLAN general es el
+    promedio simple de todas las actividades.
+
+    REAL:
+    Para cada actividad toma el último porcentaje reportado hasta cada corte.
+    Las actividades sin reporte se consideran 0%. El REAL general es el
+    promedio simple de todas las actividades.
+
+    No utiliza OTs, HH ni pesos.
+    """
+    if activities.empty:
+        return pd.DataFrame(columns=["fecha", "PLAN", "REAL"])
+
+    acts = activities.copy()
+
+    acts["inicio_plan"] = pd.to_datetime(
+        acts.get("inicio_plan"),
+        errors="coerce",
+    )
+    acts["fin_plan"] = pd.to_datetime(
+        acts.get("fin_plan"),
+        errors="coerce",
+    )
+
+    for column in ["inicio_plan", "fin_plan"]:
+        if getattr(acts[column].dt, "tz", None) is not None:
+            acts[column] = acts[column].dt.tz_localize(None)
+
+    acts["inicio_plan"] = acts["inicio_plan"].fillna(acts["fin_plan"])
+    acts["fin_plan"] = acts["fin_plan"].fillna(acts["inicio_plan"])
+
+    invalid_duration = acts["fin_plan"] <= acts["inicio_plan"]
+    acts.loc[invalid_duration, "fin_plan"] = (
+        acts.loc[invalid_duration, "inicio_plan"]
+        + pd.Timedelta(minutes=1)
+    )
+
+    valid = acts.dropna(
+        subset=["id", "inicio_plan", "fin_plan"]
+    ).copy()
+
+    if valid.empty:
+        return pd.DataFrame(columns=["fecha", "PLAN", "REAL"])
+
+    total_activities = len(valid)
+    schedule_start = valid["inicio_plan"].min()
+    schedule_finish = valid["fin_plan"].max()
+
+    # ---------------------------------------------------------------
+    # Puntos temporales:
+    # inicio exacto + 4 cortes diarios + fin exacto.
+    # ---------------------------------------------------------------
+    cut_hours = (0, 7, 14, 19)
+    cut_points = [schedule_start]
+
+    current_day = schedule_start.normalize()
+    final_day = schedule_finish.normalize()
+
+    while current_day <= final_day:
+        for hour in cut_hours:
+            cutoff = current_day + pd.Timedelta(hours=hour)
+            if schedule_start < cutoff < schedule_finish:
+                cut_points.append(cutoff)
+        current_day += pd.Timedelta(days=1)
+
+    cut_points.append(schedule_finish)
+    cut_points = sorted(
+        pd.to_datetime(
+            pd.Series(cut_points).drop_duplicates()
+        ).tolist()
+    )
+
+    # ---------------------------------------------------------------
+    # PLAN = promedio del avance esperado de todas las actividades.
+    # ---------------------------------------------------------------
+    plan_values = []
+
+    for cutoff in cut_points:
+        planned_sum = 0.0
+
+        for _, activity in valid.iterrows():
+            activity_start = activity["inicio_plan"]
+            activity_finish = activity["fin_plan"]
+
+            if cutoff <= activity_start:
+                activity_plan = 0.0
+            elif cutoff >= activity_finish:
+                activity_plan = 100.0
+            else:
+                duration_seconds = (
+                    activity_finish - activity_start
+                ).total_seconds()
+                elapsed_seconds = (
+                    cutoff - activity_start
+                ).total_seconds()
+
+                activity_plan = (
+                    elapsed_seconds / duration_seconds * 100.0
+                    if duration_seconds > 0
+                    else 100.0
+                )
+
+            planned_sum += max(
+                0.0,
+                min(100.0, activity_plan),
+            )
+
+        plan_values.append(
+            planned_sum / total_activities
+        )
+
+    # ---------------------------------------------------------------
+    # REAL = promedio del último avance de todas las actividades.
+    # ---------------------------------------------------------------
+    prog = progress.copy() if not progress.empty else pd.DataFrame()
+    latest_report_time = None
+
+    if not prog.empty:
+        prog["fecha_registro"] = pd.to_datetime(
+            prog.get("fecha_registro"),
+            errors="coerce",
+        )
+
+        if getattr(prog["fecha_registro"].dt, "tz", None) is not None:
+            prog["fecha_registro"] = (
+                prog["fecha_registro"].dt.tz_localize(None)
+            )
+
+        prog["avance"] = pd.to_numeric(
+            prog.get("avance"),
+            errors="coerce",
+        ).fillna(0).clip(0, 100)
+
+        prog = prog.dropna(
+            subset=["actividad_id", "fecha_registro"]
+        )
+
+        if not prog.empty:
+            latest_report_time = prog["fecha_registro"].max()
+
+    activity_ids = valid["id"].tolist()
+    real_values = []
+
+    for cutoff in cut_points:
+        if prog.empty:
+            real_values.append(
+                0.0 if cutoff == schedule_start else None
+            )
+            continue
+
+        # La curva real no se extiende a cortes futuros sin reporte.
+        if latest_report_time is not None and cutoff > latest_report_time:
+            real_values.append(None)
+            continue
+
+        available = prog[
+            prog["fecha_registro"] <= cutoff
+        ]
+
+        if available.empty:
+            real_values.append(0.0)
+            continue
+
+        latest_per_activity = (
+            available.sort_values("fecha_registro")
+            .groupby("actividad_id", as_index=False)
+            .tail(1)
+            .set_index("actividad_id")["avance"]
+            .to_dict()
+        )
+
+        real_sum = sum(
+            float(latest_per_activity.get(activity_id, 0.0))
+            for activity_id in activity_ids
+        )
+
+        real_values.append(
+            real_sum / total_activities
+        )
+
+    curve = pd.DataFrame({
+        "fecha": pd.to_datetime(cut_points),
+        "PLAN": plan_values,
+        "REAL": real_values,
+    })
+
+    curve["PLAN"] = (
+        pd.to_numeric(curve["PLAN"], errors="coerce")
+        .fillna(0)
+        .clip(0, 100)
+        .cummax()
+    )
+
+    real_indexes = curve.index[curve["REAL"].notna()].tolist()
+
+    if real_indexes:
+        curve.loc[real_indexes, "REAL"] = (
+            pd.to_numeric(
+                curve.loc[real_indexes, "REAL"],
+                errors="coerce",
+            )
+            .fillna(0)
+            .clip(0, 100)
+            .cummax()
+        )
+
+    # Extremos exactos del PLAN.
+    curve.loc[curve.index[0], "PLAN"] = 0.0
+    curve.loc[curve.index[-1], "PLAN"] = 100.0
+
+    if pd.isna(curve.loc[curve.index[0], "REAL"]):
+        curve.loc[curve.index[0], "REAL"] = 0.0
+
+    return curve
+
+
+def compute_kpis(activities: pd.DataFrame, progress: pd.DataFrame) -> dict:
+    status = build_activity_status(activities, progress)
+    if status.empty:
+        return {
+            "avance_general": 0.0,
+            "actividades": 0,
+            "culminadas": 0,
+            "parciales": 0,
+            "no_iniciadas": 0,
+            "spi": 0.0,
+            "hh_plan": 0.0,
+            "hh_ganadas": 0.0,
+        }
+
+    avance_general = weighted_progress(status)
+    culminadas = int((status["avance_real"] >= 100).sum())
+    parciales = int(((status["avance_real"] > 0) & (status["avance_real"] < 100)).sum())
+    no_iniciadas = int((status["avance_real"] <= 0).sum())
+
+    hh_plan_series = pd.to_numeric(status.get("hh_plan", 0), errors="coerce").fillna(0)
+    hh_plan = float(hh_plan_series.sum())
+    hh_ganadas = float((hh_plan_series * status["avance_real"] / 100).sum())
+
+    today = pd.Timestamp.today().normalize()
+    plan_dates = pd.to_datetime(status.get("fin_plan"), errors="coerce").fillna(
+        pd.to_datetime(status.get("inicio_plan"), errors="coerce")
+    )
+    plan_due = status.loc[plan_dates <= today].copy()
+    plan_due_pct = weighted_progress(
+        plan_due.assign(avance_real=100)
+    ) if not plan_due.empty else 0.0
+    spi = (avance_general / plan_due_pct) if plan_due_pct > 0 else 0.0
+
+    return {
+        "avance_general": avance_general,
+        "actividades": len(status),
+        "culminadas": culminadas,
+        "parciales": parciales,
+        "no_iniciadas": no_iniciadas,
+        "spi": spi,
+        "hh_plan": hh_plan,
+        "hh_ganadas": hh_ganadas,
+    }
+
+
+def traffic_light(value: float, green: float = 0.95, yellow: float = 0.80) -> str:
+    if value >= green:
+        return "🟢"
+    if value >= yellow:
+        return "🟡"
+    return "🔴"
+
+
+def build_daily_summary(ots: pd.DataFrame, activities: pd.DataFrame, progress: pd.DataFrame) -> str:
+    if progress.empty:
+        return "No existen avances registrados."
+
+    today = pd.Timestamp.now(tz="America/Lima").date()
+    daily = progress[
+        pd.to_datetime(progress["fecha_registro"], errors="coerce").dt.date == today
+    ].copy()
+
+    if daily.empty:
+        return "No se registraron avances durante el día."
+
+    latest = latest_progress(progress)
+    status = build_activity_status(activities, progress)
+    kpis = compute_kpis(activities, progress)
+
+    top_updates = daily.sort_values("fecha_registro", ascending=False).head(8)
+    lines = [
+        f"Resumen diario de control de OTs – {today.strftime('%d/%m/%Y')}",
+        f"Avance general acumulado: {kpis['avance_general']:.1f}%.",
+        f"Registros realizados hoy: {len(daily)}.",
+        f"Actividades culminadas: {kpis['culminadas']}.",
+        f"Actividades en ejecución: {kpis['parciales']}.",
+        f"Actividades no iniciadas: {kpis['no_iniciadas']}.",
+        "",
+        "Principales actualizaciones:"
+    ]
+
+    activity_lookup = activities.set_index("id") if not activities.empty else pd.DataFrame()
+
+    for _, row in top_updates.iterrows():
+        activity_id = row.get("actividad_id")
+        if not activity_lookup.empty and activity_id in activity_lookup.index:
+            act = activity_lookup.loc[activity_id]
+            code = act.get("codigo_actividad", "")
+            description = act.get("descripcion", "")
+        else:
+            code = ""
+            description = ""
+        lines.append(
+            f"- {code}: {row.get('avance', 0)}% – "
+            f"{row.get('descripcion_avance', '') or description}"
+        )
+
+    observations = daily["observaciones"].fillna("").astype(str)
+    observations = [x.strip() for x in observations if x.strip()]
+    if observations:
+        lines += ["", "Observaciones y restricciones reportadas:"]
+        for obs in observations[:8]:
+            lines.append(f"- {obs}")
+
+    return "\n".join(lines)
+
+
+def build_pdf_report(ots: pd.DataFrame, activities: pd.DataFrame, progress: pd.DataFrame) -> bytes:
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=28,
+        leftMargin=28,
+        topMargin=28,
+        bottomMargin=28,
+    )
+    styles = getSampleStyleSheet()
+    story = []
+
+    story.append(Paragraph("PDP CONTROL CENTER – INFORME EJECUTIVO", styles["Title"]))
+    story.append(Spacer(1, 10))
+    story.append(Paragraph(
+        f"Fecha de emisión: {datetime.now():%d/%m/%Y %H:%M}",
+        styles["Normal"],
+    ))
+    story.append(Spacer(1, 12))
+
+    kpis = compute_kpis(activities, progress)
+    summary_data = [
+        ["Indicador", "Valor"],
+        ["OTs", str(ots["id"].nunique() if not ots.empty else 0)],
+        ["Actividades", str(kpis["actividades"])],
+        ["Avance general", f"{kpis['avance_general']:.1f}%"],
+        ["SPI", f"{kpis['spi']:.2f}"],
+        ["HH planificadas", f"{kpis['hh_plan']:.0f}"],
+        ["HH ganadas", f"{kpis['hh_ganadas']:.0f}"],
+        ["Culminadas", str(kpis["culminadas"])],
+        ["En ejecución", str(kpis["parciales"])],
+        ["No iniciadas", str(kpis["no_iniciadas"])],
+    ]
+    table = Table(summary_data, colWidths=[220, 180])
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#0B5A9C")),
+        ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+        ("GRID", (0,0), (-1,-1), 0.5, colors.grey),
+        ("ALIGN", (1,1), (1,-1), "CENTER"),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.white, colors.HexColor("#F3F6F9")]),
+    ]))
+    story.append(table)
+    story.append(Spacer(1, 18))
+
+    if not progress.empty:
+        daily_summary = build_daily_summary(ots, activities, progress)
+        story.append(Paragraph("Resumen de avances", styles["Heading2"]))
+        for line in daily_summary.split("\n"):
+            if line.strip():
+                story.append(Paragraph(line, styles["BodyText"]))
+            else:
+                story.append(Spacer(1, 6))
+
+    story.append(Spacer(1, 16))
+    story.append(Paragraph("Detalle por OT", styles["Heading2"]))
+
+    status = build_activity_status(activities, progress)
+    if not status.empty and not ots.empty:
+        ot_summary = (
+            status.groupby("ot_id")
+            .apply(weighted_progress)
+            .reset_index(name="avance_ot")
+            .merge(
+                ots[["id", "ot", "equipo"]],
+                left_on="ot_id",
+                right_on="id",
+                how="left",
+            )
+        )
+        ot_table = [["OT", "Equipo", "Avance"]]
+        for _, row in ot_summary.sort_values("ot").iterrows():
+            ot_table.append([
+                str(row.get("ot", "")),
+                str(row.get("equipo", "")),
+                f"{row.get('avance_ot', 0):.1f}%",
+            ])
+        table2 = Table(ot_table, colWidths=[95, 255, 70])
+        table2.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#0B5A9C")),
+            ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+            ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+            ("GRID", (0,0), (-1,-1), 0.5, colors.grey),
+            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+            ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.white, colors.HexColor("#F3F6F9")]),
+        ]))
+        story.append(table2)
+
+    doc.build(story)
+    return buffer.getvalue()
+
+
+with st.sidebar:
+    st.markdown("## MAININ")
+    st.caption("Maintenance Ingenuity")
+    st.markdown("---")
+
+    role = st.session_state.get("role", "reporter")
+
+    if role == "admin":
+        menu_options = [
+            "Dashboard ejecutivo",
+            "Registrar avance",
+            "Detalle por OT",
+            "Evidencias",
+            "Informe diario",
+            "Reporte PDF",
+            "Administrar OTs",
+            "Importar base",
+            "Exportar reporte",
+        ]
+    else:
+        menu_options = ["Registrar avance"]
+
+    page = st.radio("Menú", menu_options)
+
+    st.markdown("---")
+    st.write(
+        f"Usuario: **{st.session_state.get('display_name', st.session_state.get('username', ''))}**"
+    )
+    st.caption(
+        "Rol: Administrador" if role == "admin" else "Rol: Reportador de avances"
+    )
+
+    if st.button("Cerrar sesión", use_container_width=True):
+        for key in ["authenticated", "username", "display_name", "role"]:
+            st.session_state.pop(key, None)
+        st.rerun()
+
+
+st.title("APLICATIVO DE CONTROL Y SEGUIMIENTO DE OTs")
+st.caption("Cada OT puede contener varias actividades, cada una con avance independiente.")
+
+ADMIN_ONLY_PAGES = {
+    "Dashboard ejecutivo",
+    "Detalle por OT",
+    "Evidencias",
+    "Informe diario",
+    "Reporte PDF",
+    "Administrar OTs",
+    "Importar base",
+    "Exportar reporte",
+}
+
+if (
+    st.session_state.get("role", "reporter") != "admin"
+    and page in ADMIN_ONLY_PAGES
+):
+    st.error("No tiene autorización para acceder a este módulo.")
+    st.stop()
+
+ots, activities, progress = load_model()
+activity_status = build_activity_status(activities, progress)
+
+
+if page == "Registrar avance":
+    if ots.empty or activities.empty:
+        st.warning("Primero debe registrar o importar OTs y actividades.")
+    else:
+        active_ots = ots.copy()
+        if "activo" in active_ots.columns:
+            active_ots = active_ots[active_ots["activo"].fillna(True)]
+
+        ot_options = active_ots["ot"].astype(str).sort_values().tolist()
+        selected_ot = st.selectbox(
+            "Escriba o seleccione la OT *",
+            ot_options,
+            index=None,
+            placeholder="Buscar OT...",
+        )
+
+        if selected_ot:
+            ot_info = active_ots[active_ots["ot"].astype(str) == selected_ot].iloc[0]
+            ot_activities = activities[activities["ot_id"] == ot_info["id"]].copy()
+
+            if ot_activities.empty:
+                st.warning("La OT seleccionada no tiene actividades registradas.")
+            else:
+                st.text_input("Equipo", value=str(ot_info.get("equipo", "")), disabled=True)
+                st.text_area(
+                    "Descripción de la OT",
+                    value=str(ot_info.get("descripcion", "")),
+                    disabled=True,
+                    height=80,
+                )
+
+                ot_activities["selector"] = (
+                    ot_activities["codigo_actividad"].astype(str)
+                    + " — "
+                    + ot_activities["descripcion"].astype(str)
+                )
+                selected_activity_label = st.selectbox(
+                    "Seleccione la actividad *",
+                    ot_activities["selector"].tolist(),
+                    index=None,
+                    placeholder="Buscar actividad...",
+                )
+
+                if selected_activity_label:
+                    activity = ot_activities[
+                        ot_activities["selector"] == selected_activity_label
+                    ].iloc[0]
+
+                    c1, c2, c3 = st.columns(3)
+                    c1.text_input(
+                        "Código de actividad",
+                        value=str(activity.get("codigo_actividad", "")),
+                        disabled=True,
+                    )
+                    c2.text_input(
+                        "Supervisor",
+                        value=str(activity.get("supervisor", "")),
+                        disabled=True,
+                    )
+                    c3.text_input(
+                        "Especialidad",
+                        value=str(activity.get("especialidad", "")),
+                        disabled=True,
+                    )
+
+                    c1, c2, c3 = st.columns(3)
+                    c1.text_input(
+                        "Grupo",
+                        value=str(activity.get("grupo", "")),
+                        disabled=True,
+                    )
+                    c2.text_input(
+                        "Inicio planificado",
+                        value=str(activity.get("inicio_plan", "")),
+                        disabled=True,
+                    )
+                    c3.text_input(
+                        "Fin planificado",
+                        value=str(activity.get("fin_plan", "")),
+                        disabled=True,
+                    )
+
+                    c1, c2, c3, c4 = st.columns(4)
+                    c1.text_input("Sección", value=str(activity.get("seccion", "")), disabled=True)
+                    c2.text_input("Personal", value=str(activity.get("personal", "")), disabled=True)
+                    c3.text_input("Duración (h)", value=str(activity.get("duracion_h", "")), disabled=True)
+                    c4.text_input("HH planificadas", value=str(activity.get("hh_plan", "")), disabled=True)
+
+                    st.text_area(
+                        "Descripción de actividad",
+                        value=str(activity.get("descripcion", "")),
+                        disabled=True,
+                        height=90,
+                    )
+
+                    current = activity_status[
+                        activity_status["id"] == activity["id"]
+                    ]
+                    current_value = (
+                        int(current.iloc[0]["avance_real"])
+                        if not current.empty else 0
+                    )
+
+                    with st.form("avance_form", clear_on_submit=True):
+                        c1, c2 = st.columns(2)
+                        avance = c1.number_input(
+                            "Porcentaje de avance de la actividad (%) *",
+                            min_value=0,
+                            max_value=100,
+                            value=current_value,
+                            step=5,
+                        )
+                        evidence_stage = c2.selectbox(
+                            "Tipo de evidencia",
+                            ["ANTES", "DURANTE", "DESPUÉS"],
+                        )
+                        critical = st.checkbox("Marcar actividad como crítica")
+                        description = st.text_area(
+                            "Descripción breve del avance realizado *",
+                            height=110,
+                        )
+                        observations = st.text_area(
+                            "Observaciones",
+                            height=100,
+                        )
+                        photos = st.file_uploader(
+                            "Evidencias fotográficas",
+                            type=["jpg", "jpeg", "png", "webp"],
+                            accept_multiple_files=True,
+                        )
+                        save = st.form_submit_button(
+                            "Guardar avance",
+                            type="primary",
+                            use_container_width=True,
+                        )
+
+                    if save:
+                        if not description.strip():
+                            st.error("Debe ingresar una descripción del avance.")
+                        elif len(photos or []) > 10:
+                            st.error("Puede adjuntar como máximo 10 fotografías.")
+                        else:
+                            try:
+                                urls = [
+                                    upload_evidence(photo, selected_ot, str(activity["id"]))
+                                    for photo in photos or []
+                                ]
+                                supabase.table("avances_actividad").insert({
+                                    "actividad_id": int(activity["id"]),
+                                    "avance": int(avance),
+                                    "descripcion_avance": description.strip(),
+                                    "observaciones": observations.strip(),
+                                    "evidencias": urls,
+                                    "tipo_evidencia": evidence_stage,
+                                    "critica": critical,
+                                    "usuario": st.session_state.get("username", "Jose"),
+                                    "fecha_registro": datetime.now(timezone.utc).isoformat(),
+                                }).execute()
+                                invalidate()
+                                st.success(
+                                    f"Avance registrado: OT {selected_ot}, "
+                                    f"actividad {activity['codigo_actividad']}."
+                                )
+                            except Exception as exc:
+                                st.error(f"No fue posible guardar el avance: {exc}")
+
+
+if page == "Dashboard ejecutivo":
+    if ots.empty or activities.empty:
+        st.info("Todavía no existen OTs y actividades registradas.")
+    else:
+        status = activity_status.copy()
+        ot_summary = (
+            status.groupby("ot_id")
+            .apply(weighted_progress)
+            .reset_index(name="avance_ot")
+        )
+        ot_summary = ot_summary.merge(
+            ots[["id", "ot", "equipo", "descripcion"]],
+            left_on="ot_id",
+            right_on="id",
+            how="left",
+        )
+
+        kpis = compute_kpis(activities, progress)
+        general = kpis["avance_general"]
+
+        c1, c2, c3, c4, c5, c6 = st.columns(6)
+        c1.metric("OTs", ots["id"].nunique())
+        c2.metric("Actividades", kpis["actividades"])
+        c3.metric("Avance general", f"{general:.1f}%")
+        c4.metric("Culminadas", kpis["culminadas"])
+        c5.metric("En ejecución", kpis["parciales"])
+        c6.metric("No iniciadas", kpis["no_iniciadas"])
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric(
+            "SPI",
+            f"{kpis['spi']:.2f}",
+            help="Índice de desempeño del cronograma. Valores menores a 1 indican atraso."
+        )
+        c2.metric("HH planificadas", f"{kpis['hh_plan']:.0f}")
+        c3.metric("HH ganadas", f"{kpis['hh_ganadas']:.0f}")
+
+        # CURVA S GENERAL
+        curve = build_s_curve(activities, progress)
+        fig_curve = go.Figure()
+        fig_curve.add_trace(go.Scatter(
+            x=curve["fecha"],
+            y=curve["PLAN"],
+            mode="lines+markers+text",
+            name="PLAN",
+            line=dict(shape="spline", smoothing=0.45, width=4),
+            marker=dict(size=8),
+            text=[f"{v:.0f}" if pd.notna(v) else "" for v in curve["PLAN"]],
+            textposition="top center",
+            connectgaps=False,
+        ))
+        fig_curve.add_trace(go.Scatter(
+            x=curve["fecha"],
+            y=curve["REAL"],
+            mode="lines+markers+text",
+            name="REAL",
+            line=dict(shape="spline", smoothing=0.45, width=4),
+            marker=dict(size=8),
+            text=[f"{v:.0f}" if pd.notna(v) else "" for v in curve["REAL"]],
+            textposition="bottom center",
+            connectgaps=False,
+        ))
+        tick_values = curve["fecha"].tolist()
+        tick_labels = [
+            fecha.strftime("%d/%m<br>%H:%M")
+            for fecha in curve["fecha"]
+        ]
+
+        fig_curve.update_layout(
+            title="Curva S – Promedio de avance de actividades (Plan vs. Real)",
+            xaxis_title="Fecha / corte operativo",
+            yaxis_title="Avance acumulado (%)",
+            yaxis_range=[0, 105],
+            legend_orientation="h",
+            hovermode="x unified",
+            height=500,
+        )
+        fig_curve.update_xaxes(
+            tickmode="array",
+            tickvals=tick_values,
+            ticktext=tick_labels,
+            tickangle=-45,
+            type="date",
+        )
+        fig_curve.update_traces(
+            hovertemplate=(
+                "%{x|%d/%m/%Y %H:%M}<br>"
+                "Avance: %{y:.2f}%<extra>%{fullData.name}</extra>"
+            ),
+        )
+        st.plotly_chart(fig_curve, use_container_width=True)
+
+        st.caption(
+            "PLAN = promedio del avance esperado de todas las actividades "
+            "según inicio_plan y fin_plan. REAL = promedio del último porcentaje "
+            "reportado de todas las actividades; las actividades sin reporte "
+            "se consideran en 0%. No se utilizan OTs, HH ni pesos."
+        )
+
+        left, right = st.columns([1.25, 1])
+        with left:
+            ot_summary["ot"] = ot_summary["ot"].astype(str)
+            fig = px.bar(
+                ot_summary.sort_values("avance_ot"),
+                x="avance_ot",
+                y="ot",
+                orientation="h",
+                text="avance_ot",
+                title="Avance ponderado por OT",
+                category_orders={"ot": ot_summary.sort_values("avance_ot")["ot"].tolist()},
+            )
+            fig.update_traces(texttemplate="%{text:.0f}%")
+            fig.update_yaxes(type="category")
+            fig.update_layout(xaxis_range=[0, 105], height=max(430, 32 * len(ot_summary)))
+            st.plotly_chart(fig, use_container_width=True)
+
+        with right:
+            status["estado_kpi"] = status["avance_real"].apply(
+                lambda x: "CULMINADA" if x >= 100 else ("NO INICIADA" if x <= 0 else "EN EJECUCIÓN")
+            )
+            states = status.groupby("estado_kpi").size().reset_index(name="Actividades")
+            fig2 = px.bar(
+                states,
+                x="estado_kpi",
+                y="Actividades",
+                text_auto=True,
+                title="Estado de actividades",
+            )
+            fig2.update_layout(height=430, showlegend=False)
+            st.plotly_chart(fig2, use_container_width=True)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            specialty = (
+                status.groupby("especialidad", as_index=False)
+                .apply(lambda x: pd.Series({"avance": weighted_progress(x)}))
+            )
+            fig3 = px.bar(
+                specialty,
+                x="especialidad",
+                y="avance",
+                text_auto=".0f",
+                title="Avance por especialidad",
+            )
+            fig3.update_layout(yaxis_range=[0,105], height=380)
+            st.plotly_chart(fig3, use_container_width=True)
+
+        with c2:
+            supervisors = status[status["supervisor"].fillna("").str.strip() != ""]
+            supervisors = (
+                supervisors.groupby("supervisor", as_index=False)
+                .apply(lambda x: pd.Series({"avance": weighted_progress(x)}))
+                .sort_values("avance")
+            )
+            fig4 = px.bar(
+                supervisors,
+                x="avance",
+                y="supervisor",
+                orientation="h",
+                text_auto=".0f",
+                title="Avance por supervisor",
+            )
+            fig4.update_layout(xaxis_range=[0,105], height=380)
+            st.plotly_chart(fig4, use_container_width=True)
+
+
+        st.markdown("---")
+        st.subheader("Detalle de actividades y avances")
+
+        table_data = status.copy()
+
+        if not ots.empty:
+            table_data = table_data.merge(
+                ots[["id", "ot", "equipo", "descripcion"]],
+                left_on="ot_id",
+                right_on="id",
+                how="left",
+                suffixes=("", "_ot"),
+            )
+
+        table_data["ot"] = table_data["ot"].astype(str)
+        table_data["avance_real"] = pd.to_numeric(
+            table_data["avance_real"], errors="coerce"
+        ).fillna(0)
+
+        table_data["estado"] = table_data["avance_real"].apply(
+            lambda value: (
+                "CULMINADO"
+                if value >= 100
+                else ("NO INICIADO" if value <= 0 else "EN EJECUCIÓN")
+            )
+        )
+
+        available_ots = sorted(table_data["ot"].dropna().unique().tolist())
+        available_groups = sorted(
+            [
+                value for value in table_data["grupo"].dropna().astype(str).unique().tolist()
+                if value.strip()
+            ]
+        )
+        available_supervisors = sorted(
+            [
+                value for value in table_data["supervisor"].dropna().astype(str).unique().tolist()
+                if value.strip()
+            ]
+        )
+
+        f1, f2, f3, f4 = st.columns(4)
+        selected_table_ot = f1.multiselect(
+            "Filtrar OT",
+            available_ots,
+            placeholder="Todas las OTs",
+        )
+        selected_table_group = f2.multiselect(
+            "Filtrar grupo",
+            available_groups,
+            placeholder="Todos los grupos",
+        )
+        selected_table_supervisor = f3.multiselect(
+            "Filtrar supervisor",
+            available_supervisors,
+            placeholder="Todos los supervisores",
+        )
+        selected_table_state = f4.multiselect(
+            "Filtrar estado",
+            ["CULMINADO", "EN EJECUCIÓN", "NO INICIADO"],
+            placeholder="Todos los estados",
+        )
+
+        filtered_table = table_data.copy()
+        if selected_table_ot:
+            filtered_table = filtered_table[
+                filtered_table["ot"].isin(selected_table_ot)
+            ]
+        if selected_table_group:
+            filtered_table = filtered_table[
+                filtered_table["grupo"].astype(str).isin(selected_table_group)
+            ]
+        if selected_table_supervisor:
+            filtered_table = filtered_table[
+                filtered_table["supervisor"].astype(str).isin(selected_table_supervisor)
+            ]
+        if selected_table_state:
+            filtered_table = filtered_table[
+                filtered_table["estado"].isin(selected_table_state)
+            ]
+
+        display_columns = [
+            "ot",
+            "grupo",
+            "codigo_actividad",
+            "descripcion",
+            "supervisor",
+            "inicio_plan",
+            "avance_real",
+            "descripcion_avance",
+            "observaciones",
+            "personal",
+            "duracion_h",
+            "hh_plan",
+            "estado",
+        ]
+        display_columns = [
+            column for column in display_columns if column in filtered_table.columns
+        ]
+
+        st.dataframe(
+            filtered_table[display_columns].sort_values(
+                ["ot", "codigo_actividad"]
+            ),
+            use_container_width=True,
+            hide_index=True,
+            height=520,
+            column_config={
+                "ot": st.column_config.TextColumn("OT"),
+                "grupo": st.column_config.TextColumn("GRUPO"),
+                "codigo_actividad": st.column_config.TextColumn("ACTIVIDAD"),
+                "descripcion": st.column_config.TextColumn(
+                    "DESCRIPCIÓN DE ACTIVIDAD",
+                    width="large",
+                ),
+                "supervisor": st.column_config.TextColumn("SUPERVISOR"),
+                "inicio_plan": st.column_config.DateColumn(
+                    "INICIO",
+                    format="DD/MM/YYYY",
+                ),
+                "avance_real": st.column_config.ProgressColumn(
+                    "AVANCE REAL",
+                    min_value=0,
+                    max_value=100,
+                    format="%d%%",
+                ),
+                "descripcion_avance": st.column_config.TextColumn(
+                    "DESCRIPCIÓN DEL AVANCE",
+                    width="large",
+                ),
+                "observaciones": st.column_config.TextColumn(
+                    "OBSERVACIONES",
+                    width="large",
+                ),
+                "personal": st.column_config.NumberColumn(
+                    "PERSONAL",
+                    format="%.0f",
+                ),
+                "duracion_h": st.column_config.NumberColumn(
+                    "DURACIÓN (H)",
+                    format="%.1f",
+                ),
+                "hh_plan": st.column_config.NumberColumn(
+                    "HH PLAN",
+                    format="%.1f",
+                ),
+                "estado": st.column_config.TextColumn("ESTADO"),
+            },
+        )
+
+        st.caption(
+            f"Mostrando {len(filtered_table)} actividades de "
+            f"{len(table_data)} registradas."
+        )
+
+
+if page == "Detalle por OT":
+    if ots.empty:
+        st.info("No existen OTs.")
+    else:
+        selected = st.selectbox(
+            "Seleccione OT",
+            ots["ot"].astype(str).sort_values().tolist(),
+        )
+        ot_row = ots[ots["ot"].astype(str) == selected].iloc[0]
+        details = activity_status[activity_status["ot_id"] == ot_row["id"]].copy()
+
+        st.subheader(f"OT {selected}")
+        st.write(f"**Equipo:** {ot_row.get('equipo', '')}")
+        st.write(f"**Descripción:** {ot_row.get('descripcion', '')}")
+
+        if details.empty:
+            st.info("La OT no tiene actividades.")
+        else:
+            st.metric("Avance ponderado de la OT", f"{weighted_progress(details):.0f}%")
+            columns = [
+                "codigo_actividad", "descripcion", "supervisor", "especialidad",
+                "grupo", "seccion", "personal", "duracion_h", "hh_plan", "peso", "avance_real"
+            ]
+            st.dataframe(
+                details[columns],
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "avance_real": st.column_config.ProgressColumn(
+                        "Avance", min_value=0, max_value=100, format="%d%%"
+                    )
+                },
+            )
+
+            details["codigo_actividad"] = details["codigo_actividad"].astype(str)
+            fig = px.bar(
+                details,
+                x="codigo_actividad",
+                y="avance_real",
+                text_auto=".0f",
+                hover_data=["descripcion"],
+                title="Avance por actividad",
+            )
+            fig.update_layout(yaxis_range=[0,105], height=400)
+            st.plotly_chart(fig, use_container_width=True)
+
+
+if page == "Evidencias":
+    st.subheader("Galería de evidencias por OT y actividad")
+
+    if progress.empty or "evidencias" not in progress.columns:
+        st.info("Todavía no existen evidencias fotográficas.")
+    else:
+        evidence_progress = progress[
+            progress["evidencias"].apply(lambda x: bool(x))
+        ].copy()
+
+        if evidence_progress.empty:
+            st.info("Todavía no existen evidencias fotográficas.")
+        else:
+            merged = evidence_progress.merge(
+                activities[["id", "ot_id", "codigo_actividad", "descripcion"]],
+                left_on="actividad_id",
+                right_on="id",
+                how="left",
+                suffixes=("", "_actividad"),
+            ).merge(
+                ots[["id", "ot", "equipo"]],
+                left_on="ot_id",
+                right_on="id",
+                how="left",
+                suffixes=("", "_ot"),
+            )
+
+            ot_options = ["TODAS"] + sorted(merged["ot"].astype(str).unique().tolist())
+            selected_ot = st.selectbox("Filtrar por OT", ot_options)
+            if selected_ot != "TODAS":
+                merged = merged[merged["ot"].astype(str) == selected_ot]
+
+            for _, row in merged.sort_values("fecha_registro", ascending=False).iterrows():
+                st.markdown(
+                    f"### OT {row['ot']} · {row.get('codigo_actividad', '')} · "
+                    f"{int(row.get('avance', 0))}%"
+                )
+                st.write(row.get("descripcion_actividad", row.get("descripcion", "")))
+                st.caption(
+                    pd.to_datetime(row["fecha_registro"]).strftime("%d/%m/%Y %H:%M")
+                    if pd.notna(row.get("fecha_registro")) else ""
+                )
+                urls = row.get("evidencias") or []
+                if isinstance(urls, str):
+                    urls = [urls]
+                cols = st.columns(min(3, len(urls)))
+                for index, url in enumerate(urls):
+                    cols[index % len(cols)].image(url, use_container_width=True)
+                st.markdown("---")
+
+
+if page == "Informe diario":
+    st.subheader("Informe diario automático")
+
+    summary_text = build_daily_summary(ots, activities, progress)
+    edited_summary = st.text_area(
+        "Resumen editable",
+        value=summary_text,
+        height=420,
+    )
+
+    st.download_button(
+        "Descargar informe diario en TXT",
+        edited_summary.encode("utf-8"),
+        file_name=f"informe_diario_{datetime.now():%Y%m%d}.txt",
+        mime="text/plain",
+        use_container_width=True,
+    )
+
+    if not progress.empty:
+        today = pd.Timestamp.now(tz="America/Lima").date()
+        daily = progress[
+            pd.to_datetime(progress["fecha_registro"], errors="coerce").dt.date == today
+        ].copy()
+
+        if not daily.empty:
+            daily_export = daily.merge(
+                activities[["id", "ot_id", "codigo_actividad", "descripcion"]],
+                left_on="actividad_id",
+                right_on="id",
+                how="left",
+                suffixes=("", "_actividad"),
+            ).merge(
+                ots[["id", "ot", "equipo"]],
+                left_on="ot_id",
+                right_on="id",
+                how="left",
+                suffixes=("", "_ot"),
+            )
+
+            if "fecha_registro" in daily_export.columns:
+                daily_export["fecha_registro"] = pd.to_datetime(
+                    daily_export["fecha_registro"], errors="coerce"
+                ).dt.tz_localize(None)
+
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine="openpyxl") as writer:
+                daily_export.to_excel(writer, index=False, sheet_name="Informe_Diario")
+
+            st.download_button(
+                "Descargar detalle diario en Excel",
+                output.getvalue(),
+                file_name=f"detalle_diario_{datetime.now():%Y%m%d}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+
+
+if page == "Reporte PDF":
+    st.subheader("Generar informe ejecutivo en PDF")
+
+    st.write(
+        "El informe incluye KPIs, avance general, SPI, HH y resumen por OT."
+    )
+
+    pdf_bytes = build_pdf_report(ots, activities, progress)
+    st.download_button(
+        "Descargar informe ejecutivo PDF",
+        data=pdf_bytes,
+        file_name=f"informe_ejecutivo_pdp_{datetime.now():%Y%m%d_%H%M}.pdf",
+        mime="application/pdf",
+        use_container_width=True,
+    )
+
+
+if page == "Administrar OTs":
+    tab1, tab2 = st.tabs(["Nueva OT", "Nueva actividad"])
+
+    with tab1:
+        with st.form("new_ot", clear_on_submit=True):
+            ot_number = st.text_input("Número de OT *")
+            equipment = st.text_input("Equipo")
+            ot_description = st.text_area("Descripción de OT *")
+            active = st.checkbox("Activa", value=True)
+            create_ot = st.form_submit_button("Crear OT", type="primary")
+        if create_ot:
+            if not ot_number.strip() or not ot_description.strip():
+                st.error("La OT y la descripción son obligatorias.")
+            else:
+                try:
+                    supabase.table("ots").insert({
+                        "ot": ot_number.strip(),
+                        "equipo": equipment.strip(),
+                        "descripcion": ot_description.strip(),
+                        "activo": active,
+                    }).execute()
+                    invalidate()
+                    st.success("OT creada.")
+                except Exception as exc:
+                    st.error(f"No fue posible crear la OT: {exc}")
+
+    with tab2:
+        if ots.empty:
+            st.info("Primero cree una OT.")
+        else:
+            with st.form("new_activity", clear_on_submit=True):
+                selected_ot_admin = st.selectbox(
+                    "OT *",
+                    ots["ot"].astype(str).sort_values().tolist(),
+                )
+                activity_code = st.text_input("Código de actividad *")
+                activity_description = st.text_area("Descripción de actividad *")
+                c1, c2, c3 = st.columns(3)
+                supervisor = c1.text_input("Supervisor")
+                specialty = c2.text_input("Especialidad")
+                group = c3.text_input("Grupo")
+                c1, c2, c3 = st.columns(3)
+                weight = c1.number_input("Peso", min_value=0.01, value=1.0, step=0.1)
+                start_plan = c2.date_input("Inicio planificado")
+                finish_plan = c3.date_input("Fin planificado")
+                create_activity = st.form_submit_button("Crear actividad", type="primary")
+
+            if create_activity:
+                if not activity_code.strip() or not activity_description.strip():
+                    st.error("Código y descripción son obligatorios.")
+                else:
+                    try:
+                        ot_id = int(
+                            ots[ots["ot"].astype(str) == selected_ot_admin].iloc[0]["id"]
+                        )
+                        supabase.table("actividades").insert({
+                            "ot_id": ot_id,
+                            "codigo_actividad": activity_code.strip(),
+                            "descripcion": activity_description.strip(),
+                            "supervisor": supervisor.strip(),
+                            "especialidad": specialty.strip(),
+                            "grupo": group.strip(),
+                            "peso": float(weight),
+                            "inicio_plan": start_plan.isoformat(),
+                            "fin_plan": finish_plan.isoformat(),
+                        }).execute()
+                        invalidate()
+                        st.success("Actividad creada.")
+                    except Exception as exc:
+                        st.error(f"No fue posible crear la actividad: {exc}")
+
+
+if page == "Importar base":
+    st.subheader("Reiniciar PDP e importar OTs y actividades")
+
+    st.warning(
+        "Esta importación reemplaza completamente la base actual. "
+        "Se eliminarán las OTs, actividades, avances, observaciones e historial "
+        "existentes antes de cargar el Excel."
+    )
+
+    st.write(
+        "El Excel debe contener exactamente dos hojas: `OTs` y `Actividades`. "
+        "La información importada será la nueva base oficial de reportabilidad."
+    )
+
+    template = io.BytesIO()
+    with pd.ExcelWriter(template, engine="openpyxl") as writer:
+        pd.DataFrame(columns=["ot", "equipo", "descripcion", "activo"]).to_excel(
+            writer, index=False, sheet_name="OTs"
+        )
+        pd.DataFrame(columns=[
+            "ot", "codigo_actividad", "descripcion", "supervisor",
+            "especialidad", "grupo", "peso", "inicio_plan", "fin_plan"
+        ]).to_excel(writer, index=False, sheet_name="Actividades")
+
+    st.download_button(
+        "Descargar plantilla",
+        template.getvalue(),
+        "plantilla_ots_actividades.xlsx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+    uploaded = st.file_uploader("Seleccione el Excel", type=["xlsx"])
+
+    confirm_reset = st.checkbox(
+        "Confirmo que deseo eliminar la reportabilidad actual y reemplazarla por este Excel."
+    )
+    confirmation_text = st.text_input(
+        'Para confirmar, escriba exactamente: REINICIAR'
+    )
+
+    if uploaded:
+        try:
+            preview_ots = pd.read_excel(uploaded, sheet_name="OTs")
+            preview_activities = pd.read_excel(uploaded, sheet_name="Actividades")
+
+            required_ots = {"ot", "equipo", "descripcion", "activo"}
+            required_activities = {
+                "ot", "codigo_actividad", "descripcion", "supervisor",
+                "especialidad", "grupo", "peso", "inicio_plan", "fin_plan"
+            }
+
+            missing_ots = required_ots - set(preview_ots.columns)
+            missing_activities = required_activities - set(preview_activities.columns)
+
+            if missing_ots or missing_activities:
+                details = []
+                if missing_ots:
+                    details.append(
+                        "Faltan columnas en OTs: " + ", ".join(sorted(missing_ots))
+                    )
+                if missing_activities:
+                    details.append(
+                        "Faltan columnas en Actividades: "
+                        + ", ".join(sorted(missing_activities))
+                    )
+                st.error(" | ".join(details))
+            else:
+                st.info(
+                    f"Archivo validado: {len(preview_ots)} OTs y "
+                    f"{len(preview_activities)} actividades."
+                )
+        except Exception as preview_error:
+            st.error(f"No fue posible validar el Excel: {preview_error}")
+
+    execute_reset = st.button(
+        "Reiniciar e importar información",
+        type="primary",
+        use_container_width=True,
+        disabled=not (
+            uploaded is not None
+            and confirm_reset
+            and confirmation_text.strip().upper() == "REINICIAR"
+        ),
+    )
+
+    if execute_reset:
+        if supabase_admin is None:
+            st.error(
+                "Falta configurar la Secret Key administrativa en Streamlit Secrets. "
+                "Agregue la sección [supabase_admin] antes de reiniciar la base."
+            )
+        else:
+            try:
+                import_ots = pd.read_excel(uploaded, sheet_name="OTs")
+                import_activities = pd.read_excel(uploaded, sheet_name="Actividades")
+
+                def clean_text(value):
+                    return "" if pd.isna(value) else str(value).strip()
+
+                def clean_datetime(value):
+                    """
+                    Conserva fecha y hora del Excel.
+                    Ejemplo: 04/08/2026 14:00 -> 2026-08-04T14:00:00
+                    """
+                    if pd.isna(value) or value in ("", None):
+                        return None
+
+                    parsed = pd.to_datetime(
+                        value,
+                        errors="coerce",
+                        dayfirst=True,
+                    )
+
+                    if pd.isna(parsed):
+                        return None
+
+                    if getattr(parsed, "tzinfo", None) is not None:
+                        parsed = parsed.tz_localize(None)
+
+                    return parsed.isoformat(timespec="seconds")
+
+                def clean_number(value, default=0):
+                    if pd.isna(value) or value in ("", None):
+                        return default
+                    return float(value)
+
+                def clean_boolean(value, default=True):
+                    if pd.isna(value) or value in ("", None):
+                        return default
+                    if isinstance(value, bool):
+                        return value
+                    return str(value).strip().lower() not in {
+                        "false", "falso", "0", "no"
+                    }
+
+                # Validar y limpiar antes de borrar la base.
+                clean_ots = []
+                for _, row in import_ots.iterrows():
+                    ot_text = clean_text(row.get("ot"))
+                    description = clean_text(row.get("descripcion"))
+                    if not ot_text or not description:
+                        continue
+                    clean_ots.append({
+                        "ot": ot_text,
+                        "equipo": clean_text(row.get("equipo")),
+                        "descripcion": description,
+                        "activo": clean_boolean(row.get("activo"), True),
+                    })
+
+                clean_activities = []
+                valid_ot_numbers = {row["ot"] for row in clean_ots}
+                for _, row in import_activities.iterrows():
+                    ot_text = clean_text(row.get("ot"))
+                    activity_code = clean_text(row.get("codigo_actividad"))
+                    activity_description = clean_text(row.get("descripcion"))
+
+                    if (
+                        not ot_text
+                        or ot_text not in valid_ot_numbers
+                        or not activity_code
+                        or not activity_description
+                    ):
+                        continue
+
+                    clean_activities.append({
+                        "ot": ot_text,
+                        "codigo_actividad": activity_code,
+                        "descripcion": activity_description,
+                        "supervisor": clean_text(row.get("supervisor")),
+                        "especialidad": clean_text(row.get("especialidad")),
+                        "grupo": clean_text(row.get("grupo")),
+                        "peso": clean_number(row.get("peso"), 1),
+                        "inicio_plan": clean_datetime(row.get("inicio_plan")),
+                        "fin_plan": clean_datetime(row.get("fin_plan")),
+                    })
+
+                if not clean_ots:
+                    raise ValueError("El Excel no contiene OTs válidas.")
+                if not clean_activities:
+                    raise ValueError("El Excel no contiene actividades válidas.")
+
+                progress_bar = st.progress(0, text="Validación completada.")
+
+                # Reinicio total. Al eliminar OTs, PostgreSQL elimina en cascada
+                # actividades y avances asociados.
+                progress_bar.progress(15, text="Eliminando la reportabilidad anterior...")
+                supabase_admin.table("ots").delete().neq("id", 0).execute()
+
+                progress_bar.progress(35, text="Cargando nuevas OTs...")
+                # Insertar en lotes para mayor estabilidad.
+                batch_size = 200
+                for start_index in range(0, len(clean_ots), batch_size):
+                    supabase_admin.table("ots").insert(
+                        clean_ots[start_index:start_index + batch_size]
+                    ).execute()
+
+                refreshed_ots = pd.DataFrame(
+                    supabase_admin.table("ots").select("id,ot").execute().data
+                )
+                ot_map = dict(
+                    zip(refreshed_ots["ot"].astype(str), refreshed_ots["id"])
+                )
+
+                activity_payloads = []
+                for row in clean_activities:
+                    activity_payloads.append({
+                        "ot_id": int(ot_map[row["ot"]]),
+                        "codigo_actividad": row["codigo_actividad"],
+                        "descripcion": row["descripcion"],
+                        "supervisor": row["supervisor"],
+                        "especialidad": row["especialidad"],
+                        "grupo": row["grupo"],
+                        "peso": row["peso"],
+                        "inicio_plan": row["inicio_plan"],
+                        "fin_plan": row["fin_plan"],
+                    })
+
+                progress_bar.progress(60, text="Cargando nuevas actividades...")
+                for start_index in range(0, len(activity_payloads), batch_size):
+                    supabase_admin.table("actividades").insert(
+                        activity_payloads[start_index:start_index + batch_size]
+                    ).execute()
+
+                progress_bar.progress(90, text="Actualizando el dashboard...")
+                invalidate()
+                st.cache_data.clear()
+
+                progress_bar.progress(100, text="Nueva base cargada correctamente.")
+                st.success(
+                    f"Reinicio completado. La nueva base contiene "
+                    f"{len(clean_ots)} OTs y {len(activity_payloads)} actividades. "
+                    "Todos los avances comienzan en 0%."
+                )
+                st.balloons()
+
+            except Exception as exc:
+                st.error(
+                    "No fue posible reiniciar e importar la base. "
+                    f"No continúe registrando avances hasta corregirlo: {exc}"
+                )
+
+
+if page == "Exportar reporte":
+    if progress.empty:
+        st.info("No existen avances para exportar.")
+    else:
+        export = progress.merge(
+            activities[["id", "ot_id", "codigo_actividad", "descripcion"]],
+            left_on="actividad_id",
+            right_on="id",
+            how="left",
+            suffixes=("", "_actividad"),
+        )
+        export = export.merge(
+            ots[["id", "ot", "equipo"]],
+            left_on="ot_id",
+            right_on="id",
+            how="left",
+            suffixes=("", "_ot"),
+        )
+        if "fecha_registro" in export.columns:
+            export["fecha_registro"] = export["fecha_registro"].dt.tz_localize(None)
+        if "evidencias" in export.columns:
+            export["evidencias"] = export["evidencias"].apply(
+                lambda x: "\n".join(x) if isinstance(x, list) else str(x or "")
+            )
+
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            export.to_excel(writer, index=False, sheet_name="Avances")
+
+        st.download_button(
+            "Descargar reporte Excel",
+            output.getvalue(),
+            "reporte_actividades_ots.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
