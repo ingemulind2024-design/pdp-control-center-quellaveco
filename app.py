@@ -840,6 +840,697 @@ def aplicar_estilo_profesional():
             .exec-kpi-foot { display:none; }
             .login-brand-title { font-size:22px; }
         }
+
+
+        /* ==================================================
+           V7 · MAININ OPERATIONAL EXPERIENCE
+           Premium, role-aware, responsive, touch-friendly
+           ================================================== */
+
+        :root {
+            --navy-950:#061625;
+            --navy-900:#0A2036;
+            --navy-800:#103556;
+            --brand-600:#2563EB;
+            --brand-500:#3B82F6;
+            --sky-400:#38BDF8;
+            --surface:#FFFFFF;
+            --surface-2:#F8FAFC;
+            --surface-3:#F1F5F9;
+            --border:#DCE4ED;
+            --text:#0F2438;
+            --text-2:#52677B;
+            --success:#0E9F6E;
+            --warning:#D97706;
+            --danger:#DC2626;
+            --radius-lg:18px;
+            --radius-md:13px;
+            --elev-1:0 1px 2px rgba(15,36,56,.035), 0 8px 24px rgba(15,36,56,.045);
+            --elev-2:0 14px 34px rgba(7,30,51,.10);
+        }
+
+        /* Más aire útil, menos decoración vacía */
+        [data-testid="stAppViewContainer"],
+        [data-testid="stMain"] {
+            background:
+                radial-gradient(circle at 88% -2%, rgba(59,130,246,.075), transparent 25rem),
+                linear-gradient(180deg,#FBFCFE 0%,#F4F7FA 100%) !important;
+        }
+
+        .block-container {
+            max-width: 1500px;
+            padding-top: .72rem;
+            padding-bottom: 2.2rem;
+        }
+
+        /* --------------------------------------------------
+           Sidebar / navegación
+           -------------------------------------------------- */
+        [data-testid="stSidebar"] {
+            background:
+                radial-gradient(circle at 0% 0%, rgba(56,189,248,.11), transparent 15rem),
+                linear-gradient(180deg,var(--navy-950) 0%,#0A2540 58%,#0B2A49 100%) !important;
+            box-shadow: 12px 0 36px rgba(6,22,37,.10);
+        }
+
+        [data-testid="stSidebar"] .block-container {
+            padding: .68rem .72rem 1rem;
+        }
+
+        .brand-lockup {
+            display:flex;
+            align-items:center;
+            gap:10px;
+            margin:2px 2px 10px;
+            padding:7px 5px 9px;
+        }
+        .brand-mark {
+            width:37px;
+            height:37px;
+            border-radius:12px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            color:#FFF;
+            font-size:17px;
+            font-weight:900;
+            letter-spacing:-.05em;
+            background:linear-gradient(145deg,#2F6FED,#38BDF8);
+            box-shadow:0 8px 18px rgba(37,99,235,.30), inset 0 1px 0 rgba(255,255,255,.22);
+        }
+        .brand-copy { min-width:0; }
+        .brand-name {
+            color:#FFFFFF;
+            font-size:13px;
+            font-weight:850;
+            letter-spacing:.06em;
+            line-height:1.1;
+        }
+        .brand-product {
+            color:#8EA9C1;
+            font-size:9px;
+            font-weight:700;
+            letter-spacing:.08em;
+            margin-top:3px;
+            text-transform:uppercase;
+        }
+
+        .nav-label {
+            color:#738EA7;
+            font-size:8px;
+            font-weight:850;
+            letter-spacing:.14em;
+            text-transform:uppercase;
+            margin:12px 6px 5px;
+        }
+
+        [data-testid="stSidebar"] [role="radiogroup"] {
+            gap:2px;
+        }
+
+        [data-testid="stSidebar"] [role="radiogroup"] label {
+            min-height:42px;
+            padding:.54rem .66rem !important;
+            margin:.08rem 0 !important;
+            border-radius:11px !important;
+            border:1px solid transparent !important;
+            background:transparent;
+            transition:background .14s ease, border-color .14s ease, transform .14s ease;
+        }
+        [data-testid="stSidebar"] [role="radiogroup"] label:hover {
+            background:rgba(255,255,255,.065) !important;
+            border-color:rgba(255,255,255,.065) !important;
+            transform:translateX(1px);
+        }
+        [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {
+            background:linear-gradient(90deg,rgba(47,111,237,.30),rgba(56,189,248,.08)) !important;
+            border-color:rgba(112,181,255,.20) !important;
+            box-shadow:inset 3px 0 0 #67C3FF, 0 5px 14px rgba(1,12,23,.10) !important;
+        }
+        [data-testid="stSidebar"] [role="radiogroup"] label p {
+            color:#DCE8F4 !important;
+            font-size:11.5px !important;
+            font-weight:700 !important;
+        }
+        [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) p {
+            color:#FFFFFF !important;
+        }
+
+        .sidebar-user-card {
+            padding:10px 10px 9px;
+            margin:4px 0 7px;
+            border-radius:13px;
+            background:linear-gradient(180deg,rgba(255,255,255,.065),rgba(255,255,255,.035));
+            border:1px solid rgba(255,255,255,.09);
+            box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+        }
+        .sidebar-avatar {
+            width:32px;
+            height:32px;
+            border-radius:10px;
+            font-size:12px;
+        }
+        .sidebar-user-name { font-size:11.5px; }
+        .sidebar-user-caption { font-size:8.8px; color:#8099B1; }
+        .sidebar-pill {
+            padding:3px 6px;
+            font-size:8.5px;
+            background:rgba(255,255,255,.045);
+        }
+
+        [data-testid="stSidebar"] .stButton > button {
+            min-height:36px !important;
+            border-radius:10px !important;
+            font-size:10.5px !important;
+            background:rgba(255,255,255,.045) !important;
+            border-color:rgba(255,255,255,.10) !important;
+            box-shadow:none !important;
+        }
+        [data-testid="stSidebar"] .stButton > button:hover {
+            background:rgba(255,255,255,.08) !important;
+        }
+
+        /* --------------------------------------------------
+           Header de aplicación: compacto y de alta jerarquía
+           -------------------------------------------------- */
+        .app-topbar {
+            position:relative;
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:18px;
+            overflow:hidden;
+            min-height:82px;
+            padding:15px 17px 14px;
+            margin-bottom:.72rem;
+            color:#FFF;
+            background:
+                radial-gradient(circle at 92% 20%, rgba(56,189,248,.19), transparent 16rem),
+                linear-gradient(118deg,#071A2C 0%,#0B2A49 58%,#123C64 100%);
+            border:1px solid rgba(255,255,255,.08);
+            border-radius:17px;
+            box-shadow:var(--elev-2);
+        }
+        .app-topbar:after {
+            content:"";
+            position:absolute;
+            width:260px;
+            height:260px;
+            right:-120px;
+            top:-160px;
+            border-radius:50%;
+            border:1px solid rgba(125,211,252,.15);
+            box-shadow:0 0 0 34px rgba(125,211,252,.025),0 0 0 68px rgba(125,211,252,.018);
+            pointer-events:none;
+        }
+        .topbar-left { position:relative; z-index:2; min-width:0; }
+        .topbar-kicker {
+            color:#8DB9DC;
+            font-size:8px;
+            font-weight:850;
+            letter-spacing:.14em;
+            text-transform:uppercase;
+            margin-bottom:4px;
+        }
+        .topbar-title {
+            color:#FFF;
+            font-size:clamp(21px,2vw,30px);
+            font-weight:880;
+            letter-spacing:-.035em;
+            line-height:1.03;
+            white-space:nowrap;
+        }
+        .topbar-subtitle {
+            color:#AFC4D7;
+            font-size:10.5px;
+            margin-top:4px;
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
+            max-width:780px;
+        }
+        .topbar-context {
+            position:relative;
+            z-index:2;
+            display:flex;
+            align-items:center;
+            justify-content:flex-end;
+            flex-wrap:wrap;
+            gap:6px;
+        }
+        .context-pill {
+            display:inline-flex;
+            align-items:center;
+            gap:5px;
+            padding:5px 8px;
+            border-radius:999px;
+            border:1px solid rgba(255,255,255,.11);
+            background:rgba(255,255,255,.055);
+            color:#D7E6F3;
+            font-size:8.8px;
+            font-weight:750;
+            white-space:nowrap;
+        }
+        .context-dot {
+            width:6px;
+            height:6px;
+            border-radius:50%;
+            background:#34D399;
+            box-shadow:0 0 0 3px rgba(52,211,153,.09);
+        }
+
+        /* --------------------------------------------------
+           Encabezados de páginas / accesos
+           -------------------------------------------------- */
+        .page-intro {
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:16px;
+            margin:.10rem 0 .72rem;
+            padding:2px 2px 8px;
+            border-bottom:1px solid #E4EAF0;
+        }
+        .page-intro-main {
+            display:flex;
+            align-items:center;
+            gap:11px;
+            min-width:0;
+        }
+        .page-icon {
+            width:36px;
+            height:36px;
+            flex:0 0 36px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            border-radius:11px;
+            color:#174EA6;
+            font-size:17px;
+            background:linear-gradient(145deg,#EEF5FF,#E7F1FF);
+            border:1px solid #D5E4FA;
+            box-shadow:0 4px 10px rgba(37,99,235,.08);
+        }
+        .page-overline {
+            color:#6B7E90;
+            font-size:8px;
+            font-weight:850;
+            letter-spacing:.13em;
+            text-transform:uppercase;
+            line-height:1.1;
+            margin-bottom:3px;
+        }
+        .page-title {
+            color:var(--text);
+            font-size:21px;
+            font-weight:860;
+            letter-spacing:-.028em;
+            line-height:1.08;
+        }
+        .page-subtitle {
+            color:#718096;
+            font-size:10.5px;
+            line-height:1.35;
+            margin-top:3px;
+        }
+        .page-badge {
+            flex:0 0 auto;
+            padding:5px 8px;
+            border-radius:999px;
+            border:1px solid #D8E2EC;
+            background:#FFFFFF;
+            color:#4D647A;
+            font-size:8.5px;
+            font-weight:800;
+            box-shadow:0 3px 9px rgba(15,36,56,.035);
+        }
+
+        /* Secciones nativas más editoriales */
+        h3 {
+            font-size:15px !important;
+            line-height:1.2 !important;
+            margin-top:1.05rem !important;
+            margin-bottom:.42rem !important;
+            letter-spacing:-.015em !important;
+        }
+        h3:after {
+            content:"";
+            display:block;
+            width:28px;
+            height:2px;
+            margin-top:5px;
+            border-radius:999px;
+            background:linear-gradient(90deg,#2563EB,#38BDF8);
+            opacity:.75;
+        }
+
+        /* --------------------------------------------------
+           Controles, formularios y datos
+           -------------------------------------------------- */
+        [data-baseweb="input"] > div,
+        [data-baseweb="textarea"] > div,
+        [data-baseweb="select"] > div {
+            border-radius:10px !important;
+            border-color:#D6E0E9 !important;
+            box-shadow:0 1px 2px rgba(15,36,56,.02) !important;
+        }
+        [data-baseweb="input"] > div:focus-within,
+        [data-baseweb="textarea"] > div:focus-within,
+        [data-baseweb="select"] > div:focus-within {
+            border-color:#7BA7F7 !important;
+            box-shadow:0 0 0 3px rgba(37,99,235,.09) !important;
+        }
+
+        .stButton > button,
+        [data-testid="stFormSubmitButton"] > button,
+        .stDownloadButton > button {
+            border-radius:10px !important;
+            min-height:40px;
+            font-size:11px !important;
+            font-weight:760 !important;
+            letter-spacing:.005em;
+            box-shadow:0 2px 6px rgba(15,36,56,.035);
+        }
+        button[kind="primary"],
+        [data-testid="stFormSubmitButton"] button[kind="primary"] {
+            background:linear-gradient(135deg,#2563EB 0%,#1557D6 100%) !important;
+            box-shadow:0 7px 16px rgba(37,99,235,.18) !important;
+        }
+
+        [data-testid="stForm"] {
+            padding:1rem 1rem 1.08rem !important;
+            border-radius:14px !important;
+            box-shadow:var(--elev-1) !important;
+        }
+
+        [data-testid="stMetric"] {
+            border-radius:13px !important;
+            padding:.78rem .86rem !important;
+            box-shadow:var(--elev-1) !important;
+        }
+
+        [data-testid="stDataFrame"] {
+            border-radius:12px !important;
+            border-color:#DDE5EC !important;
+            box-shadow:0 5px 16px rgba(15,36,56,.035) !important;
+        }
+
+        [data-testid="stPlotlyChart"] {
+            border-radius:14px !important;
+            padding:5px 5px 0 !important;
+            box-shadow:var(--elev-1) !important;
+        }
+
+        [data-testid="stFileUploader"] {
+            border-radius:13px !important;
+            background:linear-gradient(180deg,#FFF,#FBFCFE) !important;
+            border:1px dashed #B7C8D8 !important;
+        }
+
+        [data-testid="stExpander"] {
+            border-radius:12px !important;
+            box-shadow:none !important;
+        }
+
+        /* Tabs como selector segmentado */
+        [data-baseweb="tab-list"] {
+            gap:4px;
+            background:#EDF2F7;
+            border-radius:11px;
+            padding:4px;
+            width:max-content;
+            max-width:100%;
+        }
+        [data-baseweb="tab"] {
+            min-height:34px;
+            border-radius:8px;
+            padding:6px 10px;
+            color:#5C7084 !important;
+            font-size:10px !important;
+            font-weight:750 !important;
+        }
+        [data-baseweb="tab"][aria-selected="true"] {
+            background:#FFFFFF !important;
+            color:#174EA6 !important;
+            box-shadow:0 3px 8px rgba(15,36,56,.07);
+        }
+        [data-baseweb="tab-highlight"] { display:none !important; }
+
+        /* Alertas más discretas */
+        [data-testid="stAlert"] {
+            border-radius:11px !important;
+            box-shadow:none !important;
+            font-size:10.5px !important;
+        }
+
+        /* --------------------------------------------------
+           Login premium: memorable, pero sin exceso de texto
+           -------------------------------------------------- */
+        .login-shell {
+            max-width:780px;
+            margin:3vh auto 10px;
+        }
+        .login-brandline {
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            gap:9px;
+            margin-bottom:10px;
+        }
+        .login-symbol {
+            width:35px;
+            height:35px;
+            border-radius:11px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            color:#FFF;
+            font-weight:900;
+            font-size:16px;
+            background:linear-gradient(145deg,#2563EB,#38BDF8);
+            box-shadow:0 8px 18px rgba(37,99,235,.22);
+        }
+        .login-brandtext {
+            color:#15314D;
+            font-size:11px;
+            font-weight:850;
+            letter-spacing:.10em;
+            text-transform:uppercase;
+        }
+        .login-panel {
+            position:relative;
+            overflow:hidden;
+            border-radius:18px;
+            padding:18px 18px 15px;
+            color:#FFF;
+            background:
+                radial-gradient(circle at 90% 15%,rgba(56,189,248,.20),transparent 12rem),
+                linear-gradient(120deg,#071A2C,#0D3155 65%,#123E69);
+            box-shadow:0 18px 42px rgba(7,30,51,.16);
+            margin-bottom:11px;
+        }
+        .login-panel:before {
+            content:"";
+            position:absolute;
+            inset:0;
+            background:linear-gradient(90deg,rgba(125,211,252,.08) 1px,transparent 1px),linear-gradient(rgba(125,211,252,.055) 1px,transparent 1px);
+            background-size:30px 30px;
+            mask-image:linear-gradient(90deg,transparent,rgba(0,0,0,.70));
+            pointer-events:none;
+        }
+        .login-panel-row {
+            position:relative;
+            z-index:2;
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:12px;
+        }
+        .login-product {
+            color:#FFFFFF;
+            font-size:25px;
+            line-height:1.02;
+            font-weight:880;
+            letter-spacing:-.035em;
+        }
+        .login-location {
+            color:#9BB9D2;
+            font-size:9.5px;
+            margin-top:4px;
+            font-weight:700;
+        }
+        .login-mini-status {
+            display:flex;
+            flex-wrap:wrap;
+            justify-content:flex-end;
+            gap:5px;
+        }
+        .login-mini-status span {
+            border:1px solid rgba(255,255,255,.11);
+            background:rgba(255,255,255,.055);
+            color:#D7E7F4;
+            border-radius:999px;
+            padding:5px 7px;
+            font-size:8px;
+            font-weight:800;
+            letter-spacing:.035em;
+        }
+        .login-card-title {
+            color:var(--text);
+            font-size:18px;
+            line-height:1.05;
+            font-weight:850;
+            margin:1px 0 3px;
+        }
+        .login-card-sub {
+            color:#7B8B9B;
+            font-size:9.5px;
+            margin-bottom:7px;
+        }
+        .login-foot {
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            gap:6px;
+            margin-top:7px;
+            color:#748496;
+            font-size:8.8px;
+        }
+        .login-foot-dot {
+            width:6px;
+            height:6px;
+            border-radius:50%;
+            background:#10B981;
+            box-shadow:0 0 0 3px rgba(16,185,129,.09);
+        }
+
+        /* --------------------------------------------------
+           Responsive: jerarquía, no miniaturización
+           -------------------------------------------------- */
+        @media (max-width: 768px) {
+            .block-container {
+                padding:.48rem .54rem 1.4rem;
+            }
+
+            [data-testid="stSidebar"] {
+                width:min(87vw,286px) !important;
+            }
+
+            .app-topbar {
+                min-height:auto;
+                padding:11px 11px 10px;
+                border-radius:14px;
+                margin-bottom:.52rem;
+                align-items:flex-start;
+            }
+            .topbar-kicker { font-size:7px; }
+            .topbar-title {
+                font-size:18px;
+                white-space:normal;
+            }
+            .topbar-subtitle { display:none; }
+            .topbar-context {
+                gap:4px;
+                max-width:48%;
+            }
+            .context-pill {
+                font-size:7.4px;
+                padding:4px 6px;
+            }
+            .context-pill.context-secondary { display:none; }
+
+            .page-intro {
+                gap:8px;
+                padding-bottom:7px;
+                margin-bottom:.55rem;
+            }
+            .page-intro-main { gap:8px; }
+            .page-icon {
+                width:32px;
+                height:32px;
+                flex-basis:32px;
+                border-radius:10px;
+                font-size:15px;
+            }
+            .page-overline { font-size:7px; }
+            .page-title { font-size:18px; }
+            .page-subtitle {
+                font-size:9.5px;
+                max-width:78vw;
+            }
+            .page-badge { display:none; }
+
+            .exec-kpi-grid {
+                grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+                gap:6px !important;
+            }
+            .exec-kpi-card {
+                padding:9px 9px 8px 11px !important;
+                border-radius:11px !important;
+            }
+            .exec-kpi-label { font-size:7.4px !important; }
+            .exec-kpi-value { font-size:20px !important; }
+            .exec-kpi-foot { display:none !important; }
+
+            .exec-mini-grid {
+                grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+                gap:5px !important;
+            }
+            .exec-mini {
+                padding:6px 7px !important;
+                border-radius:9px !important;
+            }
+
+            [data-testid="stForm"] { padding:.76rem !important; }
+            [data-testid="stMetric"] { padding:.64rem .68rem !important; }
+
+            .stButton > button,
+            [data-testid="stFormSubmitButton"] > button,
+            .stDownloadButton > button {
+                min-height:44px !important;
+                border-radius:11px !important;
+                font-size:12px !important;
+            }
+
+            [data-baseweb="input"] > div,
+            [data-baseweb="textarea"] > div,
+            [data-baseweb="select"] > div {
+                min-height:43px;
+            }
+
+            [data-baseweb="tab-list"] {
+                width:100%;
+                overflow-x:auto;
+            }
+
+            .login-shell {
+                margin:.65rem auto 6px;
+                max-width:440px;
+            }
+            .login-panel {
+                padding:14px 13px 12px;
+                border-radius:15px;
+                margin-bottom:8px;
+            }
+            .login-panel-row {
+                align-items:flex-start;
+            }
+            .login-product { font-size:21px; }
+            .login-mini-status { max-width:42%; }
+            .login-mini-status span { font-size:7px; padding:4px 5px; }
+            .login-brandline { margin-bottom:7px; }
+        }
+
+        @media (max-width: 420px) {
+            .block-container { padding-left:.42rem; padding-right:.42rem; }
+            .app-topbar { padding:10px; }
+            .topbar-title { font-size:16.5px; }
+            .context-pill { padding:4px 5px; }
+            .page-title { font-size:17px; }
+            .page-subtitle { display:none; }
+            .login-mini-status span:nth-child(3) { display:none; }
+            .login-product { font-size:20px; }
+        }
         </style>
         """,
         unsafe_allow_html=True
@@ -848,24 +1539,31 @@ def aplicar_estilo_profesional():
 
 def mostrar_header_profesional(
     subtitulo="Sistema integrado de seguimiento y control de la Parada de Planta",
-    estado="Sistema operativo"
+    estado="Sistema operativo",
+    rol="",
+    area=""
 ):
+    rol_txt = str(rol or "").strip()
+    area_txt = str(area or estado or "").strip()
+
+    rol_html = (
+        f'<span class="context-pill context-secondary">{rol_txt}</span>'
+        if rol_txt
+        else ''
+    )
+
     st.markdown(
         f"""
-        <div class="mainin-header">
-            <div class="mainin-head-top">
-                <div class="mainin-kicker">MAININ · PROJECT CONTROL</div>
-                <div class="mainin-status">
-                    <span class="mainin-status-dot"></span>
-                    {estado}
-                </div>
+        <div class="app-topbar">
+            <div class="topbar-left">
+                <div class="topbar-kicker">MAININ · PROJECT DELIVERY PLATFORM</div>
+                <div class="topbar-title">PDP Control Center · Quellaveco</div>
+                <div class="topbar-subtitle">{subtitulo}</div>
             </div>
-            <div class="mainin-title">PDP CONTROL CENTER · QUELLAVECO</div>
-            <p class="mainin-subtitle">{subtitulo}</p>
-            <div class="mainin-area-row">
-                <span class="mainin-chip">ELECTRICIDAD</span>
-                <span class="mainin-chip">INSTRUMENTACIÓN</span>
-                <span class="mainin-chip">PLAN · REAL · ALERTAS</span>
+            <div class="topbar-context">
+                <span class="context-pill"><span class="context-dot"></span> Operativo</span>
+                {rol_html}
+                <span class="context-pill">{area_txt}</span>
             </div>
         </div>
         """,
@@ -891,6 +1589,63 @@ def mostrar_titulo_ejecutivo(
                 <div class="executive-eyebrow">PDP · QUELLAVECO</div>
                 <div class="executive-title">{titulo}</div>
                 <div class="executive-subtitle">{subtitulo}</div>
+            </div>
+            {badge_html}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+
+ICONOS_MENU = {
+    "Dashboard general": "◫",
+    "Importar planificación": "⇧",
+    "Administrar OTs": "▤",
+    "Reportes": "↗",
+    "Dashboard": "◫",
+    "Registrar avance": "+",
+    "Detalle por OT": "⌁",
+    "Evidencias": "▧",
+    "Informe diario": "≡"
+}
+
+
+def etiqueta_menu(nombre):
+    """Etiqueta visual sin cambiar el valor lógico usado por el aplicativo."""
+    return f"{ICONOS_MENU.get(nombre, '•')}   {nombre}"
+
+
+def mostrar_etiqueta_navegacion(texto="Navegación"):
+    st.markdown(
+        f'<div class="nav-label">{texto}</div>',
+        unsafe_allow_html=True
+    )
+
+
+def mostrar_acceso_pagina(
+    titulo,
+    subtitulo="",
+    icono="◫",
+    contexto="PDP · QUELLAVECO",
+    badge=""
+):
+    badge_html = (
+        f'<div class="page-badge">{badge}</div>'
+        if badge
+        else ''
+    )
+
+    st.markdown(
+        f"""
+        <div class="page-intro">
+            <div class="page-intro-main">
+                <div class="page-icon">{icono}</div>
+                <div>
+                    <div class="page-overline">{contexto}</div>
+                    <div class="page-title">{titulo}</div>
+                    <div class="page-subtitle">{subtitulo}</div>
+                </div>
             </div>
             {badge_html}
         </div>
@@ -4381,66 +5136,21 @@ LOGO_MAININ = Path(__file__).parent / "logo_mainin.png"
 
 
 def mostrar_logo_mainin_sidebar():
-    """
-    Muestra el logo corporativo MAININ una sola vez en el panel lateral.
-    Funciona para ADMIN y todos los usuarios REPORTER.
-    """
+    """Identidad compacta y consistente para escritorio y móvil."""
 
     with st.sidebar:
-
-        if LOGO_MAININ.exists():
-
-            st.image(
-                str(LOGO_MAININ),
-                use_container_width=True
-            )
-
-        else:
-
-            # Respaldo si el archivo todavía no fue cargado al repositorio.
-            st.markdown(
-                """
-                <div style="
-                    text-align:center;
-                    font-weight:700;
-                    font-size:24px;
-                    margin-bottom:4px;
-                ">
-                    MAININ
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-
         st.markdown(
             """
-            <div style="
-                text-align:center;
-                font-size:13px;
-                font-weight:600;
-                letter-spacing:0.4px;
-                color:#475467;
-                margin-top:-4px;
-                margin-bottom:2px;
-            ">
-                PDP CONTROL CENTER
-            </div>
-
-            <div style="
-                text-align:center;
-                font-size:12px;
-                font-weight:700;
-                color:#155EEF;
-                margin-bottom:12px;
-            ">
-                QUELLAVECO
+            <div class="brand-lockup">
+                <div class="brand-mark">M</div>
+                <div class="brand-copy">
+                    <div class="brand-name">MAININ</div>
+                    <div class="brand-product">PDP · Quellaveco</div>
+                </div>
             </div>
             """,
             unsafe_allow_html=True
         )
-
-        st.divider()
-
 
 
 # =====================================================
@@ -4564,12 +5274,11 @@ if "usuario_logueado" not in st.session_state:
 
 if st.session_state["usuario_logueado"] is None:
 
-    # Login deliberadamente compacto: una sola tarea por pantalla.
     st.markdown(
         """
         <style>
         [data-testid="stVerticalBlockBorderWrapper"] {
-            max-width: 430px;
+            max-width: 470px;
             margin-left: auto !important;
             margin-right: auto !important;
         }
@@ -4580,10 +5289,24 @@ if st.session_state["usuario_logueado"] is None:
 
     st.markdown(
         """
-        <div class="login-brand">
-            <div class="login-brand-kicker">MAININ · QUELLAVECO</div>
-            <div class="login-brand-title">PDP Control Center</div>
-            <p class="login-brand-sub">Electricidad · Instrumentación</p>
+        <div class="login-shell">
+            <div class="login-brandline">
+                <div class="login-symbol">M</div>
+                <div class="login-brandtext">MAININ · QUELLAVECO</div>
+            </div>
+            <div class="login-panel">
+                <div class="login-panel-row">
+                    <div>
+                        <div class="login-product">PDP Control Center</div>
+                        <div class="login-location">Electricidad · Instrumentación</div>
+                    </div>
+                    <div class="login-mini-status">
+                        <span>PLAN</span>
+                        <span>REAL</span>
+                        <span>EVIDENCIAS</span>
+                    </div>
+                </div>
+            </div>
         </div>
         """,
         unsafe_allow_html=True
@@ -4593,8 +5316,8 @@ if st.session_state["usuario_logueado"] is None:
 
         st.markdown(
             """
-            <div class="login-form-title">Ingresar</div>
-            <div class="login-form-copy">Acceso corporativo</div>
+            <div class="login-card-title">Acceso</div>
+            <div class="login-card-sub">Ingrese sus credenciales corporativas</div>
             """,
             unsafe_allow_html=True
         )
@@ -4611,7 +5334,7 @@ if st.session_state["usuario_logueado"] is None:
         )
 
         if st.button(
-            "Ingresar",
+            "Ingresar al Control Center",
             type="primary",
             use_container_width=True
         ):
@@ -4659,9 +5382,9 @@ if st.session_state["usuario_logueado"] is None:
 
         st.markdown(
             """
-            <div class="login-secure">
-                <span class="login-secure-dot"></span>
-                Sesión segura
+            <div class="login-foot">
+                <span class="login-foot-dot"></span>
+                Sesión segura · MAININ
             </div>
             """,
             unsafe_allow_html=True
@@ -4725,7 +5448,7 @@ with st.sidebar:
                 <div class="sidebar-avatar">{inicial_usuario}</div>
                 <div>
                     <div class="sidebar-user-name">{usuario['nombre']}</div>
-                    <div class="sidebar-user-caption">Sesión activa · PDP Quellaveco</div>
+                    <div class="sidebar-user-caption">Workspace activo</div>
                 </div>
             </div>
             <span class="sidebar-pill">{nombre_rol_sidebar}</span>
@@ -4736,7 +5459,7 @@ with st.sidebar:
     )
 
     if st.button(
-        "Cerrar sesión",
+        "↪  Cerrar sesión",
         use_container_width=True
     ):
         st.session_state["usuario_logueado"] = None
@@ -4748,11 +5471,10 @@ with st.sidebar:
 # =====================================================
 
 mostrar_header_profesional(
-    subtitulo=(
-        "Seguimiento ejecutivo y operativo de Electricidad e Instrumentación · "
-        f"Sesión: {usuario.get('nombre', '')}"
-    ),
-    estado=f"Área: {nombre_area}"
+    subtitulo="Seguimiento ejecutivo y operativo de la parada de planta",
+    estado=nombre_area,
+    rol=nombre_rol_sidebar,
+    area=area_sidebar
 )
 
 
@@ -4768,7 +5490,7 @@ if rol == "admin":
 
     with st.sidebar:
 
-        st.divider()
+        mostrar_etiqueta_navegacion("Workspace")
 
         pagina_admin = st.radio(
             "Menú administrador",
@@ -4777,7 +5499,9 @@ if rol == "admin":
                 "Importar planificación",
                 "Administrar OTs",
                 "Reportes"
-            ]
+            ],
+            format_func=etiqueta_menu,
+            label_visibility="collapsed"
         )
 
 
@@ -4787,13 +5511,12 @@ if rol == "admin":
 
     if pagina_admin == "Dashboard general":
 
-        mostrar_titulo_ejecutivo(
+        mostrar_acceso_pagina(
             "Dashboard Ejecutivo de Parada",
-            (
-                "Visión consolidada para seguimiento de PLAN vs REAL, "
-                "cumplimiento, alertas y desempeño operativo."
-            ),
-            "Electricidad · Instrumentación"
+            "PLAN vs REAL, cumplimiento, alertas y desempeño operativo.",
+            icono="◫",
+            contexto="ADMIN · CONTROL EJECUTIVO",
+            badge="Electricidad · Instrumentación"
         )
 
         # =================================================
@@ -7955,7 +8678,13 @@ if rol == "admin":
 
     elif pagina_admin == "Importar planificación":
 
-        st.subheader("Importar planificación")
+        mostrar_acceso_pagina(
+            "Importar planificación",
+            "Convierta y cargue el manpower de la parada en un solo flujo.",
+            icono="⇧",
+            contexto="ADMIN · PLANIFICACIÓN",
+            badge="Excel → PDP"
+        )
 
         st.info(
             "Puede subir directamente el MANPOWER ORIGINAL de Quellaveco "
@@ -8529,7 +9258,13 @@ if rol == "admin":
 
     elif pagina_admin == "Administrar OTs":
 
-        st.subheader("Administrar OTs")
+        mostrar_acceso_pagina(
+            "Administrar OTs",
+            "Cree, revise y mantenga las órdenes de trabajo por área.",
+            icono="▤",
+            contexto="ADMIN · MAESTRO DE OTs",
+            badge="Electricidad · Instrumentación"
+        )
 
         st.info(
             "Desde aquí puede crear y revisar las OTs de Electricidad e Instrumentación."
@@ -8731,11 +9466,12 @@ if rol == "admin":
 
     elif pagina_admin == "Reportes":
 
-        st.subheader("Reportes gerenciales")
-
-        st.caption(
-            "Genere el informe ejecutivo de Todas las áreas "
-            "o de un área específica sin salir de la sesión ADMIN."
+        mostrar_acceso_pagina(
+            "Reportes gerenciales",
+            "Consolide indicadores y genere entregables ejecutivos.",
+            icono="↗",
+            contexto="ADMIN · REPORTING",
+            badge="PDF · Excel"
         )
 
         resultado_areas_reporte_admin = (
@@ -9014,7 +9750,7 @@ else:
 
     with st.sidebar:
 
-        st.divider()
+        mostrar_etiqueta_navegacion("Workspace")
 
         opciones_menu = menu_por_rol(
             rol
@@ -9029,7 +9765,9 @@ else:
 
         pagina = st.radio(
             "Menú",
-            opciones_menu
+            opciones_menu,
+            format_func=etiqueta_menu,
+            label_visibility="collapsed"
         )
 
 
@@ -9055,7 +9793,13 @@ else:
 
     if pagina == "Dashboard":
 
-        st.subheader(f"Dashboard - {nombre_area}")
+        mostrar_acceso_pagina(
+            f"Dashboard · {nombre_area}",
+            "Estado operativo del área, curva S y desempeño de actividades.",
+            icono="◫",
+            contexto=f"{nombre_rol_sidebar} · CONTROL OPERATIVO",
+            badge=nombre_area
+        )
 
         # =================================================
         # 1. CARGAR ACTIVIDADES DEL ÁREA
@@ -9941,7 +10685,13 @@ else:
 
     elif pagina == "Registrar avance":
 
-        st.subheader(f"Registrar avance - {nombre_area}")
+        mostrar_acceso_pagina(
+            f"Registrar avance · {nombre_area}",
+            "Actualice el progreso y deje trazabilidad del trabajo ejecutado.",
+            icono="+",
+            contexto=f"{nombre_rol_sidebar} · CAMPO",
+            badge=nombre_area
+        )
 
         if not ots_area:
             st.warning(
@@ -10456,7 +11206,13 @@ else:
 
     elif pagina == "Detalle por OT":
 
-        st.subheader(f"Detalle por OT - {nombre_area}")
+        mostrar_acceso_pagina(
+            f"Detalle por OT · {nombre_area}",
+            "Revise actividades, estado y último avance por orden de trabajo.",
+            icono="⌁",
+            contexto=f"{nombre_rol_sidebar} · TRAZABILIDAD",
+            badge=nombre_area
+        )
 
         if not ots_area:
 
@@ -11069,7 +11825,13 @@ else:
 
     elif pagina == "Evidencias":
 
-        st.subheader(f"Evidencias - {nombre_area}")
+        mostrar_acceso_pagina(
+            f"Evidencias · {nombre_area}",
+            "Consulte el registro fotográfico asociado a los avances.",
+            icono="▧",
+            contexto=f"{nombre_rol_sidebar} · EVIDENCIAS",
+            badge=nombre_area
+        )
 
         if not ots_area:
 
@@ -11377,13 +12139,12 @@ else:
 
     elif pagina == "Informe diario":
 
-        st.subheader(
-            f"Informe diario - {nombre_area}"
-        )
-
-        st.caption(
-            "Resumen automático de avances, restricciones, "
-            "actividades críticas y pendientes del área."
+        mostrar_acceso_pagina(
+            f"Informe diario · {nombre_area}",
+            "Avances, restricciones, actividades críticas y pendientes del día.",
+            icono="≡",
+            contexto=f"{nombre_rol_sidebar} · INFORME DIARIO",
+            badge=nombre_area
         )
 
         if not ots_area:
@@ -11928,13 +12689,12 @@ else:
 
     elif pagina == "Reportes":
 
-        st.subheader(
-            f"Reportes - {nombre_area}"
-        )
-
-        st.caption(
-            "Generación de reporte ejecutivo del área "
-            "con indicadores, resumen operativo y detalle por OT."
+        mostrar_acceso_pagina(
+            f"Reportes · {nombre_area}",
+            "Genere el reporte ejecutivo y exporte la información del área.",
+            icono="↗",
+            contexto=f"{nombre_rol_sidebar} · REPORTING",
+            badge="PDF · Excel"
         )
 
         if not ots_area:
