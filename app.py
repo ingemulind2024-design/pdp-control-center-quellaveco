@@ -6969,10 +6969,198 @@ if rol == "admin":
         st.subheader("Administrar OTs")
 
         st.info(
-            "Aquí administraremos las OTs "
-            "de todas las áreas."
+            "Desde aquí puede crear y revisar las OTs de Electricidad e Instrumentación."
         )
 
+
+        # =========================================================
+        # CARGAR ÁREAS ACTIVAS
+        # =========================================================
+
+        try:
+            resultado_areas_ot = (
+                supabase
+                .table("areas")
+                .select("id,codigo,nombre")
+                .eq("activo", True)
+                .order("id")
+                .execute()
+            )
+
+            areas_ot = resultado_areas_ot.data or []
+
+        except Exception as e:
+            st.error(f"Error al cargar las áreas: {e}")
+            areas_ot = []
+
+        if not areas_ot:
+
+            st.warning("No existen áreas activas configuradas.")
+
+        else:
+
+            # =====================================================
+            # CREAR NUEVA OT
+            # =====================================================
+
+            st.markdown("### ➕ Crear nueva OT")
+
+            opciones_area_ot = {
+                f"{a['nombre']}": a["id"]
+                for a in areas_ot
+            }
+
+            with st.form("form_crear_ot", clear_on_submit=True):
+
+                area_seleccionada_ot = st.selectbox(
+                    "Área",
+                    list(opciones_area_ot.keys())
+                )
+
+                codigo_ot = st.text_input(
+                    "Número / Código de OT",
+                    placeholder="Ejemplo: OT-001"
+                )
+
+                equipo_ot = st.text_input(
+                    "Equipo",
+                    placeholder="Ejemplo: Tablero eléctrico"
+                )
+
+                descripcion_ot = st.text_area(
+                    "Descripción",
+                    placeholder="Descripción del trabajo"
+                )
+
+                activo_ot = st.checkbox(
+                    "OT activa",
+                    value=True
+                )
+
+                guardar_ot = st.form_submit_button(
+                    "Guardar OT",
+                    use_container_width=True
+                )
+
+            if guardar_ot:
+
+                codigo_ot_limpio = codigo_ot.strip()
+
+                if not codigo_ot_limpio:
+
+                    st.warning("Debe ingresar el número o código de la OT.")
+
+                else:
+
+                    area_id_ot = opciones_area_ot[
+                        area_seleccionada_ot
+                    ]
+
+                    try:
+
+                        # Verificar duplicado
+                        existente_ot = (
+                            supabase
+                            .table("ots")
+                            .select("id")
+                            .eq("area_id", area_id_ot)
+                            .eq("ot", codigo_ot_limpio)
+                            .execute()
+                        )
+
+                        if existente_ot.data:
+
+                            st.warning(
+                                "Esta OT ya existe en el área seleccionada."
+                            )
+
+                        else:
+
+                            nueva_ot = {
+                                "ot": codigo_ot_limpio,
+                                "area_id": area_id_ot,
+                                "equipo": equipo_ot.strip() or None,
+                                "descripcion": descripcion_ot.strip() or None,
+                                "activo": activo_ot
+                            }
+
+                            (
+                                supabase
+                                .table("ots")
+                                .insert(nueva_ot)
+                                .execute()
+                            )
+
+                            st.success(
+                                f"OT {codigo_ot_limpio} creada correctamente."
+                            )
+
+                            st.rerun()
+
+                    except Exception as e:
+
+                        st.error(
+                            f"No se pudo crear la OT: {e}"
+                        )
+
+            # =====================================================
+            # LISTADO DE OTs
+            # =====================================================
+
+            st.divider()
+            st.markdown("### 📋 OTs registradas")
+
+            try:
+
+                resultado_ots_admin = (
+                    supabase
+                    .table("ots")
+                    .select(
+                        "id,ot,equipo,descripcion,activo,area_id,"
+                        "areas(codigo,nombre)"
+                    )
+                    .order("id", desc=True)
+                    .execute()
+                )
+
+                ots_admin = resultado_ots_admin.data or []
+
+                if not ots_admin:
+
+                    st.info("Todavía no existen OTs registradas.")
+
+                else:
+
+                    filas_ots = []
+
+                    for registro in ots_admin:
+
+                        area_info = registro.get("areas") or {}
+
+                        filas_ots.append({
+                            "ID": registro.get("id"),
+                            "Área": area_info.get("nombre", ""),
+                            "OT": registro.get("ot", ""),
+                            "Equipo": registro.get("equipo", ""),
+                            "Descripción": registro.get("descripcion", ""),
+                            "Activo": "Sí" if registro.get("activo") else "No"
+                        })
+
+                    df_ots_admin = pd.DataFrame(filas_ots)
+
+                    st.dataframe(
+                        df_ots_admin,
+                        use_container_width=True,
+                        hide_index=True
+                    )
+
+            except Exception as e:
+
+                st.error(
+                    f"No se pudieron cargar las OTs: {e}"
+                )
+
+    
 
     # =====================================================
     # REPORTES
