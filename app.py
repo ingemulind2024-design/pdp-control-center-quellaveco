@@ -52,442 +52,496 @@ def aplicar_estilo_profesional():
         """
         <style>
         :root {
-            --mainin-navy: #12345B;
-            --mainin-navy-2: #0B2747;
-            --mainin-red: #E64A4A;
-            --mainin-bg: #F5F7FA;
-            --mainin-card: #FFFFFF;
-            --mainin-border: #E2E8F0;
-            --mainin-text: #1F2937;
-            --mainin-muted: #667085;
-            --mainin-green: #147D64;
-            --mainin-amber: #B7791F;
+            --ink: #0B1F33;
+            --ink-2: #143A5E;
+            --blue: #155EEF;
+            --cyan: #0EA5E9;
+            --red: #D92D20;
+            --green: #079455;
+            --amber: #DC6803;
+            --bg: #F3F6F9;
+            --card: #FFFFFF;
+            --line: #DDE5EE;
+            --muted: #667085;
+            --soft: #EEF3F8;
+            --shadow: 0 10px 28px rgba(11,31,51,.07);
         }
 
-        /* Fondo general */
-        [data-testid="stAppViewContainer"] {
-            background: var(--mainin-bg);
+        html, body, [class*="css"] {
+            font-family: Inter, "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
         }
 
+        [data-testid="stAppViewContainer"],
         [data-testid="stMain"] {
-            background: var(--mainin-bg);
+            background:
+                radial-gradient(circle at 82% 8%, rgba(21,94,239,.055), transparent 24rem),
+                linear-gradient(180deg, #F8FAFC 0%, var(--bg) 44%, #F5F7FA 100%);
         }
 
         .block-container {
-            padding-top: 1.35rem;
+            padding-top: 1.05rem;
             padding-bottom: 3rem;
-            max-width: 1500px;
+            max-width: 1540px;
         }
 
-        /* Sidebar */
+        /* Sidebar: limpio, corporativo y compacto */
         [data-testid="stSidebar"] {
-            background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
-            border-right: 1px solid var(--mainin-border);
+            background: linear-gradient(180deg, #071A2C 0%, #0B2747 100%);
+            border-right: 1px solid rgba(255,255,255,.08);
+        }
+
+        [data-testid="stSidebar"] * {
+            color: #E8EEF5;
         }
 
         [data-testid="stSidebar"] .block-container {
-            padding-top: 1rem;
+            padding-top: .75rem;
         }
 
-        /* Títulos */
+        [data-testid="stSidebar"] hr {
+            border-color: rgba(255,255,255,.10) !important;
+        }
+
+        [data-testid="stSidebar"] [role="radiogroup"] label {
+            padding: .52rem .62rem;
+            margin: .16rem 0;
+            border-radius: 10px;
+            border: 1px solid transparent;
+            transition: .16s ease;
+        }
+
+        [data-testid="stSidebar"] [role="radiogroup"] label:hover {
+            background: rgba(255,255,255,.07);
+            border-color: rgba(255,255,255,.08);
+        }
+
+        [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {
+            background: linear-gradient(90deg, rgba(21,94,239,.34), rgba(14,165,233,.12));
+            border-color: rgba(106,170,255,.28);
+            box-shadow: inset 3px 0 0 #66B6FF;
+        }
+
+        [data-testid="stSidebar"] .stButton > button {
+            background: rgba(255,255,255,.06) !important;
+            color: #F4F7FB !important;
+            border-color: rgba(255,255,255,.16) !important;
+        }
+
+        /* Tipografía */
         h1, h2, h3 {
-            color: var(--mainin-navy-2) !important;
-            letter-spacing: -0.02em;
+            color: var(--ink) !important;
+            letter-spacing: -.025em;
         }
+        h1 { font-weight: 850 !important; }
+        h2, h3 { font-weight: 800 !important; }
+        p, label { color: #344054; }
 
-        h1 {
-            font-weight: 800 !important;
-        }
-
-        h2, h3 {
-            font-weight: 750 !important;
-        }
-
-        /* Formularios */
-        [data-testid="stForm"] {
-            background: var(--mainin-card);
-            border: 1px solid var(--mainin-border);
-            border-radius: 16px;
-            padding: 1.15rem 1.2rem 1.2rem 1.2rem;
-            box-shadow: 0 5px 18px rgba(15, 39, 71, 0.05);
-        }
-
+        /* Inputs */
         [data-baseweb="input"] > div,
         [data-baseweb="textarea"] > div,
         [data-baseweb="select"] > div {
-            border-radius: 10px !important;
+            background: #FFFFFF !important;
+            border-radius: 11px !important;
+            border-color: #D6DEE8 !important;
+            box-shadow: 0 1px 2px rgba(16,24,40,.025);
+        }
+
+        [data-baseweb="input"] > div:focus-within,
+        [data-baseweb="textarea"] > div:focus-within,
+        [data-baseweb="select"] > div:focus-within {
+            border-color: #84ADFF !important;
+            box-shadow: 0 0 0 3px rgba(21,94,239,.10) !important;
         }
 
         /* Botones */
         .stButton > button,
         [data-testid="stFormSubmitButton"] > button,
         .stDownloadButton > button {
-            border-radius: 10px !important;
+            border-radius: 11px !important;
             min-height: 42px;
-            font-weight: 700 !important;
-            border: 1px solid #D0D5DD !important;
-            transition: all .16s ease-in-out;
+            font-weight: 750 !important;
+            border: 1px solid #CCD6E2 !important;
+            background: #FFFFFF;
+            color: var(--ink) !important;
+            box-shadow: 0 2px 6px rgba(11,31,51,.035);
+            transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease;
         }
 
         .stButton > button:hover,
         [data-testid="stFormSubmitButton"] > button:hover,
         .stDownloadButton > button:hover {
             transform: translateY(-1px);
-            box-shadow: 0 5px 12px rgba(15, 39, 71, 0.10);
+            border-color: #A8B7C8 !important;
+            box-shadow: 0 7px 18px rgba(11,31,51,.09);
         }
 
         button[kind="primary"],
         [data-testid="stFormSubmitButton"] button[kind="primary"] {
-            background: var(--mainin-red) !important;
-            border-color: var(--mainin-red) !important;
-            color: white !important;
+            background: linear-gradient(135deg, #155EEF 0%, #0B4ACB 100%) !important;
+            border-color: #155EEF !important;
+            color: #FFFFFF !important;
+            box-shadow: 0 7px 18px rgba(21,94,239,.20);
         }
 
-        /* Métricas */
+        /* Formularios y contenedores */
+        [data-testid="stForm"],
+        [data-testid="stVerticalBlockBorderWrapper"] > div {
+            background: rgba(255,255,255,.94);
+            border: 1px solid var(--line) !important;
+            border-radius: 16px !important;
+            box-shadow: 0 8px 24px rgba(11,31,51,.045);
+        }
+
+        [data-testid="stForm"] {
+            padding: 1.1rem 1.15rem 1.2rem;
+        }
+
+        /* Métricas nativas */
         [data-testid="stMetric"] {
-            background: var(--mainin-card);
-            border: 1px solid var(--mainin-border);
-            border-radius: 14px;
-            padding: 0.8rem 0.9rem;
-            box-shadow: 0 4px 14px rgba(15, 39, 71, 0.045);
+            background: #FFFFFF;
+            border: 1px solid var(--line);
+            border-radius: 15px;
+            padding: .9rem 1rem;
+            box-shadow: 0 6px 18px rgba(11,31,51,.045);
         }
+        [data-testid="stMetricLabel"] { color: var(--muted) !important; font-weight: 700 !important; }
+        [data-testid="stMetricValue"] { color: var(--ink) !important; font-weight: 850 !important; }
 
-        [data-testid="stMetricLabel"] {
-            color: var(--mainin-muted) !important;
-            font-weight: 650 !important;
-        }
-
-        [data-testid="stMetricValue"] {
-            color: var(--mainin-navy-2) !important;
-            font-weight: 800 !important;
-        }
-
-        /* Alertas */
         [data-testid="stAlert"] {
             border-radius: 12px;
             border-width: 1px;
         }
 
-        /* Dataframes */
         [data-testid="stDataFrame"] {
-            border: 1px solid var(--mainin-border);
-            border-radius: 12px;
+            border: 1px solid var(--line);
+            border-radius: 14px;
             overflow: hidden;
-            box-shadow: 0 4px 14px rgba(15, 39, 71, 0.04);
+            box-shadow: 0 7px 20px rgba(11,31,51,.045);
         }
 
-        /* Divisores */
+        [data-testid="stPlotlyChart"] {
+            background: #FFFFFF;
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            padding: 8px 8px 1px;
+            box-shadow: 0 8px 24px rgba(11,31,51,.05);
+        }
+
+        [data-testid="stFileUploader"] {
+            background: #FFFFFF;
+            border: 1px dashed #B9C7D6;
+            border-radius: 15px;
+            padding: 8px;
+        }
+
+        [data-testid="stExpander"] {
+            border: 1px solid var(--line) !important;
+            border-radius: 13px !important;
+            background: #FFFFFF;
+            box-shadow: 0 4px 14px rgba(11,31,51,.035);
+        }
+
         hr {
-            border-color: #E6EBF1 !important;
-            margin-top: 1.2rem !important;
-            margin-bottom: 1.2rem !important;
+            border-color: #E4EAF1 !important;
+            margin-top: 1.15rem !important;
+            margin-bottom: 1.15rem !important;
         }
 
-        /* Radio del menú lateral */
-        [data-testid="stSidebar"] [role="radiogroup"] label {
-            padding: 0.42rem 0.55rem;
-            border-radius: 9px;
-            margin-bottom: 0.12rem;
-        }
-
-        [data-testid="stSidebar"] [role="radiogroup"] label:hover {
-            background: #EEF3F8;
-        }
-
-        /* Tarjetas propias */
+        /* Header command-center */
         .mainin-header {
-            background: linear-gradient(110deg, #0B2747 0%, #123F70 72%, #174F87 100%);
-            border-radius: 18px;
-            padding: 22px 26px;
-            margin-bottom: 1.35rem;
-            color: white;
-            box-shadow: 0 10px 28px rgba(11, 39, 71, 0.14);
             position: relative;
             overflow: hidden;
+            background:
+                linear-gradient(115deg, #061827 0%, #0B2747 54%, #103D67 100%);
+            border: 1px solid rgba(255,255,255,.08);
+            border-radius: 20px;
+            padding: 20px 22px 18px;
+            margin-bottom: 1.05rem;
+            color: white;
+            box-shadow: 0 16px 38px rgba(6,24,39,.17);
+        }
+
+        .mainin-header:before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background:
+                linear-gradient(90deg, rgba(14,165,233,.14) 1px, transparent 1px),
+                linear-gradient(rgba(14,165,233,.10) 1px, transparent 1px);
+            background-size: 36px 36px;
+            mask-image: linear-gradient(90deg, transparent 0%, rgba(0,0,0,.35) 60%, rgba(0,0,0,.75) 100%);
+            pointer-events: none;
         }
 
         .mainin-header:after {
             content: "";
             position: absolute;
-            width: 210px;
-            height: 210px;
-            right: -65px;
-            top: -95px;
+            width: 340px;
+            height: 340px;
             border-radius: 50%;
-            background: rgba(255,255,255,.06);
+            right: -115px;
+            top: -165px;
+            background: radial-gradient(circle, rgba(21,94,239,.38) 0%, rgba(21,94,239,0) 68%);
+            pointer-events: none;
+        }
+
+        .mainin-head-top {
+            position: relative;
+            z-index: 2;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 11px;
         }
 
         .mainin-kicker {
-            font-size: 12px;
-            font-weight: 800;
-            letter-spacing: .11em;
-            text-transform: uppercase;
-            color: #D8E6F3;
-            margin-bottom: 7px;
-        }
-
-        .mainin-title {
-            font-size: clamp(26px, 3.2vw, 43px);
-            line-height: 1.08;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 10px;
             font-weight: 850;
-            margin: 0 0 8px 0;
-            color: white;
+            letter-spacing: .14em;
+            text-transform: uppercase;
+            color: #B9D4EF;
         }
 
-        .mainin-subtitle {
-            font-size: 14px;
-            color: #D9E3EE;
-            margin: 0;
-            max-width: 850px;
+        .mainin-kicker:before {
+            content: "";
+            width: 18px;
+            height: 2px;
+            border-radius: 99px;
+            background: #49B7F5;
         }
 
         .mainin-status {
             display: inline-flex;
             align-items: center;
             gap: 7px;
-            margin-top: 14px;
-            padding: 6px 10px;
-            border: 1px solid rgba(255,255,255,.18);
+            padding: 5px 9px;
+            border: 1px solid rgba(255,255,255,.14);
             border-radius: 999px;
-            background: rgba(255,255,255,.08);
-            font-size: 12px;
-            font-weight: 700;
-            color: white;
+            background: rgba(255,255,255,.065);
+            backdrop-filter: blur(7px);
+            font-size: 10px;
+            font-weight: 750;
+            color: #EAF2F9;
         }
 
         .mainin-status-dot {
-            width: 8px;
-            height: 8px;
+            width: 7px;
+            height: 7px;
             border-radius: 50%;
-            background: #4ADE80;
-            box-shadow: 0 0 0 3px rgba(74, 222, 128, .15);
+            background: #32D583;
+            box-shadow: 0 0 0 4px rgba(50,213,131,.11);
         }
 
-        .sidebar-user-card {
-            border: 1px solid var(--mainin-border);
-            border-radius: 14px;
-            background: white;
-            padding: 12px 13px;
-            margin: 8px 0 10px 0;
-            box-shadow: 0 3px 10px rgba(15, 39, 71, 0.04);
+        .mainin-title {
+            position: relative;
+            z-index: 2;
+            font-size: clamp(25px, 2.8vw, 39px);
+            line-height: 1.03;
+            font-weight: 880;
+            letter-spacing: -.035em;
+            color: #FFFFFF;
+            margin: 0 0 7px 0;
         }
 
-        .sidebar-user-name {
-            color: var(--mainin-navy-2);
-            font-weight: 800;
-            font-size: 14px;
-            margin-bottom: 7px;
+        .mainin-subtitle {
+            position: relative;
+            z-index: 2;
+            font-size: 12.5px;
+            color: #C9D7E5;
+            margin: 0;
+            max-width: 900px;
         }
 
-        .sidebar-pill {
-            display: inline-block;
-            padding: 4px 8px;
-            margin: 2px 3px 2px 0;
-            border-radius: 999px;
-            background: #EEF4FB;
-            color: #164C7E;
-            font-size: 11px;
+        .mainin-area-row {
+            position: relative;
+            z-index: 2;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 7px;
+            margin-top: 13px;
+        }
+
+        .mainin-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 8px;
+            border-radius: 8px;
+            background: rgba(255,255,255,.07);
+            border: 1px solid rgba(255,255,255,.10);
+            color: #DCE8F4;
+            font-size: 10px;
             font-weight: 750;
+            letter-spacing: .025em;
         }
 
-        .section-card {
-            background: white;
-            border: 1px solid var(--mainin-border);
+        .mainin-chip:before {
+            content: "";
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: #66B6FF;
+        }
+
+        /* Sidebar identity */
+        .sidebar-user-card {
+            border: 1px solid rgba(255,255,255,.10);
             border-radius: 14px;
-            padding: 15px 17px;
-            margin: 0.5rem 0 1rem 0;
-            box-shadow: 0 4px 14px rgba(15, 39, 71, 0.04);
+            background: rgba(255,255,255,.055);
+            padding: 11px 12px;
+            margin: 7px 0 10px;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
         }
 
-        /* Ocultar menú técnico de Streamlit para una apariencia más limpia */
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
+        .sidebar-user-top { display:flex; align-items:center; gap:9px; margin-bottom:8px; }
+        .sidebar-avatar {
+            width: 34px; height:34px; border-radius:10px;
+            display:flex; align-items:center; justify-content:center;
+            background: linear-gradient(135deg,#155EEF,#0EA5E9);
+            color:#FFF; font-weight:850; font-size:13px;
+            box-shadow: 0 5px 12px rgba(21,94,239,.24);
+        }
+        .sidebar-user-name { color:#FFFFFF; font-weight:800; font-size:12.5px; line-height:1.15; }
+        .sidebar-user-caption { color:#91A8BE; font-size:9.5px; margin-top:2px; }
+        .sidebar-pill {
+            display:inline-block;
+            padding:4px 7px;
+            margin:2px 3px 0 0;
+            border-radius:999px;
+            border:1px solid rgba(255,255,255,.10);
+            background:rgba(255,255,255,.055);
+            color:#CFE0F1;
+            font-size:9.5px;
+            font-weight:750;
+        }
 
-        /* Dashboard ejecutivo */
+        /* Títulos de sección */
         .executive-title-row {
             display:flex;
             align-items:flex-end;
             justify-content:space-between;
             gap:16px;
-            margin: 0.15rem 0 0.85rem 0;
+            margin: .2rem 0 .75rem;
         }
-
         .executive-eyebrow {
-            font-size:11px;
-            font-weight:800;
-            letter-spacing:.12em;
+            display:flex;
+            align-items:center;
+            gap:7px;
+            font-size:9.5px;
+            font-weight:850;
+            letter-spacing:.14em;
             text-transform:uppercase;
-            color:#56718F;
+            color:#55728F;
             margin-bottom:4px;
         }
-
+        .executive-eyebrow:before {
+            content:"";
+            width:7px; height:7px; border-radius:2px;
+            background:#155EEF;
+            box-shadow:0 0 0 3px rgba(21,94,239,.09);
+        }
         .executive-title {
-            font-size:25px;
-            line-height:1.15;
-            font-weight:850;
-            color:#0B2747;
-            margin:0;
+            font-size:24px;
+            line-height:1.08;
+            font-weight:860;
+            letter-spacing:-.028em;
+            color:var(--ink);
         }
-
-        .executive-subtitle {
-            color:#667085;
-            font-size:13px;
-            margin-top:4px;
-        }
-
+        .executive-subtitle { color:#667085; font-size:12px; margin-top:4px; max-width:900px; }
         .executive-badge {
             white-space:nowrap;
-            border:1px solid #D7E1EB;
-            background:#F7FAFD;
+            border:1px solid #D4DFEA;
+            background:linear-gradient(180deg,#FFFFFF,#F5F8FB);
             color:#31506F;
             border-radius:999px;
             padding:6px 10px;
-            font-size:11px;
+            font-size:10px;
             font-weight:750;
+            box-shadow:0 3px 9px rgba(11,31,51,.04);
         }
 
+        /* KPIs ejecutivos */
+        .exec-meta-line { display:flex; flex-wrap:wrap; gap:7px; margin:.2rem 0 .75rem; }
+        .exec-meta-pill {
+            display:inline-flex; align-items:center; gap:6px;
+            padding:5px 8px; border-radius:8px;
+            background:#FFFFFF; border:1px solid #DCE5EE;
+            color:#53657A; font-size:10px; font-weight:700;
+        }
         .exec-kpi-grid {
             display:grid;
             grid-template-columns:repeat(4,minmax(0,1fr));
-            gap:12px;
-            margin: 0.35rem 0 0.85rem 0;
+            gap:11px;
+            margin:.25rem 0 .75rem;
         }
-
         .exec-kpi-card {
             position:relative;
-            background:#FFFFFF;
-            border:1px solid #E2E8F0;
-            border-radius:15px;
-            padding:15px 16px 14px 16px;
-            box-shadow:0 5px 16px rgba(15,39,71,.045);
+            background:linear-gradient(180deg,#FFFFFF 0%,#FBFCFE 100%);
+            border:1px solid #DCE5EE;
+            border-radius:16px;
+            padding:14px 15px 13px 16px;
+            box-shadow:0 9px 24px rgba(11,31,51,.05);
             overflow:hidden;
         }
-
-        .exec-kpi-card:before {
+        .exec-kpi-card:after {
             content:"";
             position:absolute;
-            left:0;
-            top:0;
-            width:4px;
-            height:100%;
-            background:#1F5F97;
+            right:-18px; top:-24px;
+            width:82px; height:82px; border-radius:50%;
+            background:rgba(21,94,239,.035);
         }
+        .exec-kpi-card:before { content:""; position:absolute; left:0; top:0; width:3px; height:100%; background:#155EEF; }
+        .exec-kpi-card.good:before { background:var(--green); }
+        .exec-kpi-card.warn:before { background:#F79009; }
+        .exec-kpi-card.risk:before { background:var(--red); }
+        .exec-kpi-card.neutral:before { background:#5B7895; }
+        .exec-kpi-label { color:#667085; font-size:9.5px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; margin-bottom:6px; }
+        .exec-kpi-value { color:var(--ink); font-size:27px; line-height:1; font-weight:880; letter-spacing:-.035em; }
+        .exec-kpi-foot { color:#7A8795; font-size:10px; margin-top:7px; min-height:15px; }
+        .exec-mini-grid { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:9px; margin:.15rem 0 .8rem; }
+        .exec-mini { background:#F8FAFC; border:1px solid #E2E8F0; border-radius:12px; padding:9px 10px; }
+        .exec-mini-label { color:#748295; font-size:8.8px; font-weight:800; text-transform:uppercase; letter-spacing:.07em; }
+        .exec-mini-value { color:#173A5E; font-size:17px; font-weight:850; margin-top:2px; }
 
-        .exec-kpi-card.good:before { background:#16856C; }
-        .exec-kpi-card.warn:before { background:#D69E2E; }
-        .exec-kpi-card.risk:before { background:#D94841; }
-        .exec-kpi-card.neutral:before { background:#6B7F93; }
-
-        .exec-kpi-label {
-            color:#667085;
-            font-size:11px;
-            font-weight:750;
-            text-transform:uppercase;
-            letter-spacing:.055em;
-            margin-bottom:5px;
+        /* Login premium */
+        .login-hero {
+            min-height: 310px;
+            border-radius: 18px;
+            padding: 26px 26px 24px;
+            background: linear-gradient(145deg,#061827 0%,#0B2747 56%,#114D79 100%);
+            color:#FFF;
+            box-shadow: 0 16px 40px rgba(6,24,39,.17);
+            position:relative;
+            overflow:hidden;
         }
-
-        .exec-kpi-value {
-            color:#0B2747;
-            font-size:28px;
-            line-height:1;
-            font-weight:850;
-            letter-spacing:-.025em;
+        .login-hero:after {
+            content:""; position:absolute; width:260px; height:260px; border-radius:50%;
+            right:-105px; bottom:-125px; background:rgba(14,165,233,.14);
         }
+        .login-kicker { font-size:10px; font-weight:850; letter-spacing:.15em; color:#9CC7E8; text-transform:uppercase; }
+        .login-title { font-size:31px; line-height:1.05; font-weight:880; letter-spacing:-.035em; margin:10px 0 10px; color:#FFF; }
+        .login-copy { color:#C8D8E7; font-size:12px; max-width:520px; line-height:1.55; }
+        .login-feature { display:flex; align-items:center; gap:9px; margin-top:11px; color:#E7F0F8; font-size:11px; font-weight:650; }
+        .login-feature span { width:7px; height:7px; border-radius:2px; background:#45B8F5; box-shadow:0 0 0 4px rgba(69,184,245,.10); }
+        .login-form-title { font-size:21px; color:var(--ink); font-weight:850; margin-bottom:3px; }
+        .login-form-copy { color:#667085; font-size:11px; margin-bottom:12px; }
 
-        .exec-kpi-foot {
-            color:#7A8795;
-            font-size:11px;
-            margin-top:7px;
-            min-height:16px;
-        }
-
-        .exec-mini-grid {
-            display:grid;
-            grid-template-columns:repeat(6,minmax(0,1fr));
-            gap:10px;
-            margin: 0.2rem 0 0.9rem 0;
-        }
-
-        .exec-mini {
-            background:#F9FBFD;
-            border:1px solid #E5EBF1;
-            border-radius:12px;
-            padding:10px 12px;
-        }
-
-        .exec-mini-label {
-            color:#748295;
-            font-size:10px;
-            font-weight:750;
-            text-transform:uppercase;
-            letter-spacing:.04em;
-        }
-
-        .exec-mini-value {
-            color:#173A5E;
-            font-size:18px;
-            font-weight:850;
-            margin-top:2px;
-        }
-
-        .exec-meta-line {
-            display:flex;
-            flex-wrap:wrap;
-            gap:8px;
-            margin:0.25rem 0 0.9rem 0;
-        }
-
-        .exec-meta-pill {
-            display:inline-flex;
-            align-items:center;
-            gap:6px;
-            padding:5px 9px;
-            border-radius:999px;
-            background:#F5F8FB;
-            border:1px solid #E2E8F0;
-            color:#53657A;
-            font-size:11px;
-            font-weight:650;
-        }
-
-        /* Plotly como tarjeta ejecutiva */
-        [data-testid="stPlotlyChart"] {
-            background:#FFFFFF;
-            border:1px solid var(--mainin-border);
-            border-radius:14px;
-            padding:8px 8px 2px 8px;
-            box-shadow:0 4px 14px rgba(15,39,71,.04);
-        }
-
-        /* Controles principales */
-        [data-testid="stFileUploader"] {
-            background:#FFFFFF;
-            border:1px dashed #C7D3E0;
-            border-radius:14px;
-            padding:8px;
-        }
-
-        [data-testid="stExpander"] {
-            border:1px solid #E2E8F0 !important;
-            border-radius:12px !important;
-            background:#FFFFFF;
-        }
+        #MainMenu { visibility:hidden; }
+        footer { visibility:hidden; }
 
         @media (max-width: 1100px) {
             .exec-kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
             .exec-mini-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
         }
-
         @media (max-width: 768px) {
-            .block-container {
-                padding-left: 0.8rem;
-                padding-right: 0.8rem;
-            }
-            .mainin-header {
-                border-radius: 14px;
-                padding: 18px;
-            }
+            .block-container { padding-left:.75rem; padding-right:.75rem; }
+            .mainin-header { border-radius:15px; padding:16px; }
+            .mainin-head-top { align-items:flex-start; flex-direction:column; }
+            .mainin-title { font-size:26px; }
             .executive-title-row { align-items:flex-start; flex-direction:column; }
             .exec-kpi-grid { grid-template-columns:1fr; }
             .exec-mini-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
@@ -505,12 +559,19 @@ def mostrar_header_profesional(
     st.markdown(
         f"""
         <div class="mainin-header">
-            <div class="mainin-kicker">MAININ · CONTROL DE PROYECTOS</div>
+            <div class="mainin-head-top">
+                <div class="mainin-kicker">MAININ · PROJECT CONTROL</div>
+                <div class="mainin-status">
+                    <span class="mainin-status-dot"></span>
+                    {estado}
+                </div>
+            </div>
             <div class="mainin-title">PDP CONTROL CENTER · QUELLAVECO</div>
             <p class="mainin-subtitle">{subtitulo}</p>
-            <div class="mainin-status">
-                <span class="mainin-status-dot"></span>
-                {estado}
+            <div class="mainin-area-row">
+                <span class="mainin-chip">ELECTRICIDAD</span>
+                <span class="mainin-chip">INSTRUMENTACIÓN</span>
+                <span class="mainin-chip">PLAN · REAL · ALERTAS</span>
             </div>
         </div>
         """,
@@ -4217,66 +4278,93 @@ if st.session_state["usuario_logueado"] is None:
         estado="Acceso seguro"
     )
 
-    st.subheader("Acceso al sistema")
-    st.caption("Ingrese sus credenciales corporativas para continuar.")
+    col_login_info, col_login_form = st.columns([1.18, 0.82], gap="large")
 
-    username = st.text_input(
-        "Usuario",
-        placeholder="Ingrese su usuario"
-    )
+    with col_login_info:
+        st.markdown(
+            """
+            <div class="login-hero">
+                <div class="login-kicker">CONTROL OPERATIVO DE PARADA</div>
+                <div class="login-title">Decisiones rápidas.<br>Datos claros.</div>
+                <div class="login-copy">
+                    Un entorno único para controlar planificación, cumplimiento,
+                    avances de campo, evidencias y alertas de Electricidad e Instrumentación.
+                </div>
+                <div class="login-feature"><span></span> Curva S y desviación PLAN vs REAL</div>
+                <div class="login-feature"><span></span> Seguimiento por OT, actividad y supervisor</div>
+                <div class="login-feature"><span></span> Evidencias fotográficas y reportes ejecutivos</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-    password = st.text_input(
-        "Contraseña",
-        type="password",
-        placeholder="Ingrese su contraseña"
-    )
-
-    if st.button(
-        "Ingresar",
-        type="primary",
-        use_container_width=True
-    ):
-
-        usuario = obtener_usuario(username.strip())
-
-        if usuario is None:
-            st.error("Usuario no encontrado o inactivo.")
-
-        else:
-
-            rol_login = normalizar_rol(
-                usuario.get("rol")
+    with col_login_form:
+        with st.container(border=True):
+            st.markdown(
+                """
+                <div class="login-form-title">Acceso al sistema</div>
+                <div class="login-form-copy">Ingrese sus credenciales corporativas para continuar.</div>
+                """,
+                unsafe_allow_html=True
             )
 
-            if rol_login not in ROLES_PERMITIDOS:
-                st.error(
-                    "El usuario tiene un rol no permitido. "
-                    "Contacte al administrador."
-                )
+            username = st.text_input(
+                "Usuario",
+                placeholder="Ingrese su usuario"
+            )
 
-            elif (
-                rol_login != "admin"
-                and not usuario.get("area_id")
-            ):
-                st.error(
-                    "El usuario no tiene un área asignada."
-                )
+            password = st.text_input(
+                "Contraseña",
+                type="password",
+                placeholder="Ingrese su contraseña"
+            )
 
-            elif verificar_contrasena(
-                password.strip(),
-                usuario.get("password_hash")
+            if st.button(
+                "Ingresar al Control Center",
+                type="primary",
+                use_container_width=True
             ):
 
-                usuario["rol"] = rol_login
+                usuario = obtener_usuario(username.strip())
 
-                st.session_state[
-                    "usuario_logueado"
-                ] = usuario
+                if usuario is None:
+                    st.error("Usuario no encontrado o inactivo.")
 
-                st.rerun()
+                else:
 
-            else:
-                st.error("Contraseña incorrecta.")
+                    rol_login = normalizar_rol(
+                        usuario.get("rol")
+                    )
+
+                    if rol_login not in ROLES_PERMITIDOS:
+                        st.error(
+                            "El usuario tiene un rol no permitido. "
+                            "Contacte al administrador."
+                        )
+
+                    elif (
+                        rol_login != "admin"
+                        and not usuario.get("area_id")
+                    ):
+                        st.error(
+                            "El usuario no tiene un área asignada."
+                        )
+
+                    elif verificar_contrasena(
+                        password.strip(),
+                        usuario.get("password_hash")
+                    ):
+
+                        usuario["rol"] = rol_login
+
+                        st.session_state[
+                            "usuario_logueado"
+                        ] = usuario
+
+                        st.rerun()
+
+                    else:
+                        st.error("Contraseña incorrecta.")
 
     st.stop()
 
@@ -4327,10 +4415,18 @@ with st.sidebar:
         else nombre_area
     )
 
+    inicial_usuario = str(usuario.get("nombre") or "U").strip()[:1].upper()
+
     st.markdown(
         f"""
         <div class="sidebar-user-card">
-            <div class="sidebar-user-name">{usuario['nombre']}</div>
+            <div class="sidebar-user-top">
+                <div class="sidebar-avatar">{inicial_usuario}</div>
+                <div>
+                    <div class="sidebar-user-name">{usuario['nombre']}</div>
+                    <div class="sidebar-user-caption">Sesión activa · PDP Quellaveco</div>
+                </div>
+            </div>
             <span class="sidebar-pill">{nombre_rol_sidebar}</span>
             <span class="sidebar-pill">{area_sidebar}</span>
         </div>
@@ -4654,9 +4750,9 @@ if rol == "admin":
 
                     figura_curva_admin = go.Figure()
 
-                    for nombre_curva, posicion_texto in [
-                        ("PLAN", "top center"),
-                        ("REAL", "bottom center")
+                    for nombre_curva, posicion_texto, color_curva in [
+                        ("PLAN", "top center", "#155EEF"),
+                        ("REAL", "bottom center", "#D92D20")
                     ]:
 
                         datos_curva_admin = (
@@ -4690,12 +4786,15 @@ if rol == "admin":
                                 line=dict(
                                     width=4,
                                     shape="spline",
-                                    smoothing=1.05
+                                    smoothing=1.05,
+                                    color=color_curva
                                 ),
                                 marker=dict(
                                     size=7,
+                                    color=color_curva,
                                     line=dict(
-                                        width=1
+                                        width=1,
+                                        color="#FFFFFF"
                                     )
                                 ),
                                 connectgaps=False,
@@ -5400,29 +5499,49 @@ if rol == "admin":
                     figura_areas.add_bar(
                         x=df_resumen_areas["Área"],
                         y=df_resumen_areas["Plan (%)"],
-                        name="PLAN"
+                        name="PLAN",
+                        marker_color="#155EEF",
+                        marker_line_width=0
                     )
 
                     figura_areas.add_bar(
                         x=df_resumen_areas["Área"],
                         y=df_resumen_areas["Real (%)"],
-                        name="REAL"
+                        name="REAL",
+                        marker_color="#D92D20",
+                        marker_line_width=0
                     )
 
                     figura_areas.update_layout(
                         barmode="group",
+                        paper_bgcolor="#FFFFFF",
+                        plot_bgcolor="#FFFFFF",
+                        font=dict(color="#344054", size=12),
+                        bargap=0.28,
                         yaxis=dict(
                             title="Avance (%)",
-                            range=[0, 100]
+                            range=[0, 100],
+                            gridcolor="#EEF2F6",
+                            ticksuffix="%",
+                            zeroline=False
                         ),
-                        xaxis_title="Área",
-                        legend_title="Curva",
+                        xaxis=dict(
+                            title="Área",
+                            linecolor="#D0D5DD"
+                        ),
+                        legend=dict(
+                            orientation="h",
+                            yanchor="bottom",
+                            y=1.03,
+                            xanchor="right",
+                            x=1
+                        ),
                         height=430,
                         margin=dict(
-                            l=20,
+                            l=30,
                             r=20,
-                            t=20,
-                            b=20
+                            t=45,
+                            b=30
                         )
                     )
 
