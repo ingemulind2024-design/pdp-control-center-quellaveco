@@ -574,7 +574,7 @@ def aplicar_estilo_profesional():
         #MainMenu { visibility:hidden; }
         footer { visibility:hidden; }
         header[data-testid="stHeader"] { background: transparent; }
-        [data-testid="stToolbar"] { display:none !important; }
+        [data-testid="stToolbar"] { visibility:visible !important; }
         [data-testid="stDecoration"] { display:none !important; }
         .stAppDeployButton { display:none !important; }
 
@@ -633,8 +633,64 @@ def aplicar_estilo_profesional():
             .exec-mini-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
         }
 
+        /* ==================================================
+           NAVEGACIÓN MÓVIL · mantener acceso al sidebar
+           ================================================== */
+        [data-testid="stSidebarCollapsedControl"] {
+            display:flex !important;
+            visibility:visible !important;
+            opacity:1 !important;
+            z-index:999999 !important;
+        }
+
+        [data-testid="stSidebarCollapsedControl"] button {
+            border:1px solid #D7E2EC !important;
+            background:#FFFFFF !important;
+            color:#0B1F33 !important;
+            border-radius:11px !important;
+            box-shadow:0 6px 18px rgba(11,31,51,.12) !important;
+        }
+
+        [data-testid="stSidebarCollapseButton"] button {
+            border-radius:10px !important;
+        }
+
         /* MOBILE UX: menos scroll, mejor lectura y controles táctiles */
         @media (max-width: 768px) {
+            /* Botón hamburguesa siempre visible en celular */
+            [data-testid="stSidebarCollapsedControl"] {
+                position:fixed !important;
+                top:8px !important;
+                left:8px !important;
+                width:42px !important;
+                height:42px !important;
+            }
+
+            [data-testid="stSidebarCollapsedControl"] button {
+                width:42px !important;
+                height:42px !important;
+                min-height:42px !important;
+                padding:0 !important;
+            }
+
+            /* Conserva una franja mínima para no tapar el contenido */
+            header[data-testid="stHeader"] {
+                display:block !important;
+                height:50px !important;
+                background:rgba(248,250,252,.94) !important;
+                backdrop-filter:blur(10px);
+                border-bottom:1px solid rgba(221,229,238,.75);
+                z-index:999990 !important;
+            }
+
+            [data-testid="stToolbar"] {
+                display:flex !important;
+                visibility:visible !important;
+                opacity:1 !important;
+            }
+
+            .stAppDeployButton { display:none !important; }
+
             .block-container {
                 padding-top:.55rem;
                 padding-left:.62rem;
