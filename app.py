@@ -10335,45 +10335,77 @@ else:
                     )
                 )
 
+                fig_s.add_annotation(
+                    x=curva_s.dropna(subset=["PLAN"]).iloc[-1]["fecha"],
+                    y=float(curva_s.dropna(subset=["PLAN"]).iloc[-1]["PLAN"]),
+                    text=f'PLAN {float(curva_s.dropna(subset=["PLAN"]).iloc[-1]["PLAN"]):.1f}%',
+                    showarrow=True,
+                    arrowhead=0,
+                    ax=0,
+                    ay=-28,
+                    bgcolor="#155EEF",
+                    bordercolor="#155EEF",
+                    font=dict(color="white", size=11),
+                    borderpad=4
+                )
+
+                fig_s.add_annotation(
+                    x=curva_s.dropna(subset=["REAL"]).iloc[-1]["fecha"],
+                    y=float(curva_s.dropna(subset=["REAL"]).iloc[-1]["REAL"]),
+                    text=f'REAL {float(curva_s.dropna(subset=["REAL"]).iloc[-1]["REAL"]):.1f}%',
+                    showarrow=True,
+                    arrowhead=0,
+                    ax=0,
+                    ay=28,
+                    bgcolor="#D92D20",
+                    bordercolor="#D92D20",
+                    font=dict(color="white", size=11),
+                    borderpad=4
+                )
+
                 fig_s.update_layout(
                     xaxis_title="Fecha / Hora",
                     yaxis_title="Avance acumulado (%)",
                     paper_bgcolor="#FFFFFF",
                     plot_bgcolor="#FFFFFF",
-                    font=dict(color="#344054", size=12),
+                    font=dict(color="#1F2937", size=14),
                     yaxis=dict(
                         range=[0, 108],
                         ticksuffix="%",
                         dtick=20,
                         showgrid=True,
                         gridwidth=1,
-                        gridcolor="#EEF2F6",
-                        linecolor="#D0D5DD",
+                        gridcolor="#E5EAF0",
+                        linecolor="#98A2B3",
+                        tickfont=dict(size=12, color="#344054"),
+                        title_font=dict(size=13, color="#344054"),
                         zeroline=False
                     ),
                     xaxis=dict(
                         showgrid=True,
                         gridwidth=1,
-                        gridcolor="#EEF2F6",
-                        linecolor="#D0D5DD",
-                        tickformat="%d/%m\n%H:%M"
+                        gridcolor="#F1F5F9",
+                        linecolor="#98A2B3",
+                        tickformat="%d/%m\n%H:%M",
+                        tickfont=dict(size=11, color="#344054"),
+                        title_font=dict(size=13, color="#344054")
                     ),
                     hovermode="x unified",
                     legend=dict(
                         orientation="h",
                         yanchor="bottom",
-                        y=1.03,
+                        y=1.02,
                         xanchor="center",
-                        x=0.5
+                        x=0.5,
+                        font=dict(size=12, color="#344054")
                     ),
                     margin=dict(
-                        l=38,
-                        r=18,
-                        t=46,
-                        b=42
+                        l=48,
+                        r=22,
+                        t=50,
+                        b=52
                     ),
-                    height=420
-                
+                    height=460
                 )
 
                 st.plotly_chart(
@@ -10381,10 +10413,8 @@ else:
                     use_container_width=True,
                     config={
                         "displaylogo": False,
-                        "responsive": True,
-                        "modeBarButtonsToRemove": [
-                            "lasso2d", "select2d", "autoScale2d", "toggleSpikelines"
-                        ]
+                        "displayModeBar": False,
+                        "responsive": True
                     }
                 )
 
@@ -10446,6 +10476,8 @@ else:
                 fig_ot.update_traces(
                     texttemplate="%{text:.1f}%",
                     textposition="outside",
+                    textfont=dict(size=12, color="#0B1F33"),
+                    cliponaxis=False,
                     marker_line_width=0,
                     hovertemplate="<b>%{y}</b><br>Avance: %{x:.1f}%<br>Actividades: %{customdata[0]}<br>Pendientes: %{customdata[1]}<extra></extra>"
                 )
@@ -10453,18 +10485,30 @@ else:
                 fig_ot.update_layout(
                     paper_bgcolor="#FFFFFF",
                     plot_bgcolor="#FFFFFF",
-                    font=dict(color="#344054", size=12),
+                    font=dict(color="#1F2937", size=13),
                     xaxis_title="Avance (%)",
                     yaxis_title="",
-                    xaxis=dict(range=[0, 105], ticksuffix="%", gridcolor="#EEF2F6", linecolor="#D0D5DD"),
-                    yaxis=dict(gridcolor="rgba(0,0,0,0)", linecolor="#D0D5DD"),
-                    margin=dict(l=20, r=20, t=18, b=26),
-                    height=max(300, len(df_ot) * 30)
+                    xaxis=dict(
+                        range=[0, 105],
+                        ticksuffix="%",
+                        gridcolor="#E5EAF0",
+                        linecolor="#98A2B3",
+                        tickfont=dict(size=11, color="#344054")
+                    ),
+                    yaxis=dict(
+                        gridcolor="rgba(0,0,0,0)",
+                        linecolor="#D0D5DD",
+                        tickfont=dict(size=11, color="#344054"),
+                        automargin=True
+                    ),
+                    margin=dict(l=20, r=46, t=18, b=30),
+                    height=max(360, len(df_ot) * 42)
                 )
 
                 st.plotly_chart(
                     fig_ot,
-                    use_container_width=True
+                    use_container_width=True,
+                    config={"displaylogo": False, "displayModeBar": False, "responsive": True}
                 )
 
             # =============================================
@@ -10501,6 +10545,8 @@ else:
 
             fig_estado.update_traces(
                 textposition="outside",
+                textfont=dict(size=12, color="#0B1F33"),
+                cliponaxis=False,
                 marker_line_width=0,
                 hovertemplate="<b>%{x}</b><br>Cantidad: %{y}<extra></extra>"
             )
@@ -10508,19 +10554,27 @@ else:
             fig_estado.update_layout(
                 paper_bgcolor="#FFFFFF",
                 plot_bgcolor="#FFFFFF",
-                font=dict(color="#344054", size=12),
+                font=dict(color="#1F2937", size=13),
                 yaxis_title="N.º de actividades",
                 xaxis_title="",
                 showlegend=False,
-                yaxis=dict(gridcolor="#EEF2F6", linecolor="#D0D5DD"),
-                xaxis=dict(linecolor="#D0D5DD"),
-                margin=dict(l=20, r=20, t=12, b=20),
-                height=320
+                yaxis=dict(
+                    gridcolor="#E5EAF0",
+                    linecolor="#98A2B3",
+                    tickfont=dict(size=11, color="#344054")
+                ),
+                xaxis=dict(
+                    linecolor="#98A2B3",
+                    tickfont=dict(size=11, color="#344054")
+                ),
+                margin=dict(l=20, r=26, t=12, b=20),
+                height=340
             )
 
             st.plotly_chart(
                 fig_estado,
-                use_container_width=True
+                use_container_width=True,
+                config={"displaylogo": False, "displayModeBar": False, "responsive": True}
             )
 
             st.divider()
@@ -10591,6 +10645,8 @@ else:
                     fig_esp.update_traces(
                         texttemplate="%{text:.1f}%",
                         textposition="outside",
+                        textfont=dict(size=12, color="#0B1F33"),
+                        cliponaxis=False,
                         marker_line_width=0,
                         hovertemplate="<b>%{y}</b><br>Avance: %{x:.1f}%<extra></extra>"
                     )
@@ -10598,18 +10654,30 @@ else:
                     fig_esp.update_layout(
                         paper_bgcolor="#FFFFFF",
                         plot_bgcolor="#FFFFFF",
-                        font=dict(color="#344054", size=12),
+                        font=dict(color="#1F2937", size=13),
                         xaxis_title="Avance (%)",
                         yaxis_title="",
-                        xaxis=dict(range=[0, 105], ticksuffix="%", gridcolor="#EEF2F6", linecolor="#D0D5DD"),
-                        yaxis=dict(gridcolor="rgba(0,0,0,0)", linecolor="#D0D5DD"),
-                        margin=dict(l=18, r=18, t=12, b=24),
-                        height=360
+                        xaxis=dict(
+                            range=[0, 105],
+                            ticksuffix="%",
+                            gridcolor="#E5EAF0",
+                            linecolor="#98A2B3",
+                            tickfont=dict(size=11, color="#344054")
+                        ),
+                        yaxis=dict(
+                            gridcolor="rgba(0,0,0,0)",
+                            linecolor="#D0D5DD",
+                            tickfont=dict(size=11, color="#344054"),
+                            automargin=True
+                        ),
+                        margin=dict(l=18, r=44, t=12, b=24),
+                        height=380
                     )
 
                     st.plotly_chart(
                         fig_esp,
-                        use_container_width=True
+                        use_container_width=True,
+                        config={"displaylogo": False, "displayModeBar": False, "responsive": True}
                     )
 
             # =============================================
@@ -10676,6 +10744,8 @@ else:
                     fig_sup.update_traces(
                         texttemplate="%{text:.1f}%",
                         textposition="outside",
+                        textfont=dict(size=12, color="#0B1F33"),
+                        cliponaxis=False,
                         marker_line_width=0,
                         hovertemplate="<b>%{y}</b><br>Avance: %{x:.1f}%<extra></extra>"
                     )
@@ -10683,18 +10753,30 @@ else:
                     fig_sup.update_layout(
                         paper_bgcolor="#FFFFFF",
                         plot_bgcolor="#FFFFFF",
-                        font=dict(color="#344054", size=12),
+                        font=dict(color="#1F2937", size=13),
                         xaxis_title="Avance (%)",
                         yaxis_title="",
-                        xaxis=dict(range=[0, 105], ticksuffix="%", gridcolor="#EEF2F6", linecolor="#D0D5DD"),
-                        yaxis=dict(gridcolor="rgba(0,0,0,0)", linecolor="#D0D5DD"),
-                        margin=dict(l=18, r=18, t=12, b=24),
-                        height=360
+                        xaxis=dict(
+                            range=[0, 105],
+                            ticksuffix="%",
+                            gridcolor="#E5EAF0",
+                            linecolor="#98A2B3",
+                            tickfont=dict(size=11, color="#344054")
+                        ),
+                        yaxis=dict(
+                            gridcolor="rgba(0,0,0,0)",
+                            linecolor="#D0D5DD",
+                            tickfont=dict(size=11, color="#344054"),
+                            automargin=True
+                        ),
+                        margin=dict(l=18, r=44, t=12, b=24),
+                        height=380
                     )
 
                     st.plotly_chart(
                         fig_sup,
-                        use_container_width=True
+                        use_container_width=True,
+                        config={"displaylogo": False, "displayModeBar": False, "responsive": True}
                     )
 
             st.divider()
