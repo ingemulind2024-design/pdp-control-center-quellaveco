@@ -303,6 +303,182 @@ def aplicar_estilo_profesional():
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
 
+        /* Dashboard ejecutivo */
+        .executive-title-row {
+            display:flex;
+            align-items:flex-end;
+            justify-content:space-between;
+            gap:16px;
+            margin: 0.15rem 0 0.85rem 0;
+        }
+
+        .executive-eyebrow {
+            font-size:11px;
+            font-weight:800;
+            letter-spacing:.12em;
+            text-transform:uppercase;
+            color:#56718F;
+            margin-bottom:4px;
+        }
+
+        .executive-title {
+            font-size:25px;
+            line-height:1.15;
+            font-weight:850;
+            color:#0B2747;
+            margin:0;
+        }
+
+        .executive-subtitle {
+            color:#667085;
+            font-size:13px;
+            margin-top:4px;
+        }
+
+        .executive-badge {
+            white-space:nowrap;
+            border:1px solid #D7E1EB;
+            background:#F7FAFD;
+            color:#31506F;
+            border-radius:999px;
+            padding:6px 10px;
+            font-size:11px;
+            font-weight:750;
+        }
+
+        .exec-kpi-grid {
+            display:grid;
+            grid-template-columns:repeat(4,minmax(0,1fr));
+            gap:12px;
+            margin: 0.35rem 0 0.85rem 0;
+        }
+
+        .exec-kpi-card {
+            position:relative;
+            background:#FFFFFF;
+            border:1px solid #E2E8F0;
+            border-radius:15px;
+            padding:15px 16px 14px 16px;
+            box-shadow:0 5px 16px rgba(15,39,71,.045);
+            overflow:hidden;
+        }
+
+        .exec-kpi-card:before {
+            content:"";
+            position:absolute;
+            left:0;
+            top:0;
+            width:4px;
+            height:100%;
+            background:#1F5F97;
+        }
+
+        .exec-kpi-card.good:before { background:#16856C; }
+        .exec-kpi-card.warn:before { background:#D69E2E; }
+        .exec-kpi-card.risk:before { background:#D94841; }
+        .exec-kpi-card.neutral:before { background:#6B7F93; }
+
+        .exec-kpi-label {
+            color:#667085;
+            font-size:11px;
+            font-weight:750;
+            text-transform:uppercase;
+            letter-spacing:.055em;
+            margin-bottom:5px;
+        }
+
+        .exec-kpi-value {
+            color:#0B2747;
+            font-size:28px;
+            line-height:1;
+            font-weight:850;
+            letter-spacing:-.025em;
+        }
+
+        .exec-kpi-foot {
+            color:#7A8795;
+            font-size:11px;
+            margin-top:7px;
+            min-height:16px;
+        }
+
+        .exec-mini-grid {
+            display:grid;
+            grid-template-columns:repeat(6,minmax(0,1fr));
+            gap:10px;
+            margin: 0.2rem 0 0.9rem 0;
+        }
+
+        .exec-mini {
+            background:#F9FBFD;
+            border:1px solid #E5EBF1;
+            border-radius:12px;
+            padding:10px 12px;
+        }
+
+        .exec-mini-label {
+            color:#748295;
+            font-size:10px;
+            font-weight:750;
+            text-transform:uppercase;
+            letter-spacing:.04em;
+        }
+
+        .exec-mini-value {
+            color:#173A5E;
+            font-size:18px;
+            font-weight:850;
+            margin-top:2px;
+        }
+
+        .exec-meta-line {
+            display:flex;
+            flex-wrap:wrap;
+            gap:8px;
+            margin:0.25rem 0 0.9rem 0;
+        }
+
+        .exec-meta-pill {
+            display:inline-flex;
+            align-items:center;
+            gap:6px;
+            padding:5px 9px;
+            border-radius:999px;
+            background:#F5F8FB;
+            border:1px solid #E2E8F0;
+            color:#53657A;
+            font-size:11px;
+            font-weight:650;
+        }
+
+        /* Plotly como tarjeta ejecutiva */
+        [data-testid="stPlotlyChart"] {
+            background:#FFFFFF;
+            border:1px solid var(--mainin-border);
+            border-radius:14px;
+            padding:8px 8px 2px 8px;
+            box-shadow:0 4px 14px rgba(15,39,71,.04);
+        }
+
+        /* Controles principales */
+        [data-testid="stFileUploader"] {
+            background:#FFFFFF;
+            border:1px dashed #C7D3E0;
+            border-radius:14px;
+            padding:8px;
+        }
+
+        [data-testid="stExpander"] {
+            border:1px solid #E2E8F0 !important;
+            border-radius:12px !important;
+            background:#FFFFFF;
+        }
+
+        @media (max-width: 1100px) {
+            .exec-kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+            .exec-mini-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+        }
+
         @media (max-width: 768px) {
             .block-container {
                 padding-left: 0.8rem;
@@ -312,6 +488,9 @@ def aplicar_estilo_profesional():
                 border-radius: 14px;
                 padding: 18px;
             }
+            .executive-title-row { align-items:flex-start; flex-direction:column; }
+            .exec-kpi-grid { grid-template-columns:1fr; }
+            .exec-mini-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
         }
         </style>
         """,
@@ -332,6 +511,119 @@ def mostrar_header_profesional(
             <div class="mainin-status">
                 <span class="mainin-status-dot"></span>
                 {estado}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+def mostrar_titulo_ejecutivo(
+    titulo,
+    subtitulo="",
+    badge=""
+):
+    badge_html = (
+        f'<span class="executive-badge">{badge}</span>'
+        if badge
+        else ''
+    )
+
+    st.markdown(
+        f"""
+        <div class="executive-title-row">
+            <div>
+                <div class="executive-eyebrow">PDP · QUELLAVECO</div>
+                <div class="executive-title">{titulo}</div>
+                <div class="executive-subtitle">{subtitulo}</div>
+            </div>
+            {badge_html}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+def mostrar_resumen_ejecutivo_dashboard(
+    kpis,
+    total_ots,
+    vista
+):
+    plan = float(kpis.get("avance_plan", 0) or 0)
+    real = float(kpis.get("avance_general", 0) or 0)
+    spi = float(kpis.get("spi", 0) or 0)
+    desviacion = real - plan
+
+    if desviacion >= -5:
+        clase = "good"
+        estado = "En línea"
+    elif desviacion >= -10:
+        clase = "warn"
+        estado = "Seguimiento"
+    else:
+        clase = "risk"
+        estado = "Recuperación"
+
+    fecha_actualizacion = (
+        pd.Timestamp.now(tz="America/Lima")
+        .strftime("%d/%m/%Y %H:%M")
+    )
+
+    st.markdown(
+        f"""
+        <div class="exec-meta-line">
+            <span class="exec-meta-pill">Vista: {vista}</span>
+            <span class="exec-meta-pill">Actualizado: {fecha_actualizacion}</span>
+            <span class="exec-meta-pill">Estado: {estado}</span>
+        </div>
+
+        <div class="exec-kpi-grid">
+            <div class="exec-kpi-card neutral">
+                <div class="exec-kpi-label">Plan actual</div>
+                <div class="exec-kpi-value">{plan:.1f}%</div>
+                <div class="exec-kpi-foot">Avance esperado a la hora de corte</div>
+            </div>
+            <div class="exec-kpi-card {clase}">
+                <div class="exec-kpi-label">Avance real</div>
+                <div class="exec-kpi-value">{real:.1f}%</div>
+                <div class="exec-kpi-foot">Último avance acumulado registrado</div>
+            </div>
+            <div class="exec-kpi-card {clase}">
+                <div class="exec-kpi-label">Desviación</div>
+                <div class="exec-kpi-value">{desviacion:+.1f} pp</div>
+                <div class="exec-kpi-foot">REAL menos PLAN</div>
+            </div>
+            <div class="exec-kpi-card {clase}">
+                <div class="exec-kpi-label">SPI</div>
+                <div class="exec-kpi-value">{spi:.2f}</div>
+                <div class="exec-kpi-foot">Índice de desempeño del cronograma</div>
+            </div>
+        </div>
+
+        <div class="exec-mini-grid">
+            <div class="exec-mini">
+                <div class="exec-mini-label">OTs</div>
+                <div class="exec-mini-value">{int(total_ots)}</div>
+            </div>
+            <div class="exec-mini">
+                <div class="exec-mini-label">Actividades</div>
+                <div class="exec-mini-value">{int(kpis.get('actividades', 0) or 0)}</div>
+            </div>
+            <div class="exec-mini">
+                <div class="exec-mini-label">Culminadas</div>
+                <div class="exec-mini-value">{int(kpis.get('culminadas', 0) or 0)}</div>
+            </div>
+            <div class="exec-mini">
+                <div class="exec-mini-label">En ejecución</div>
+                <div class="exec-mini-value">{int(kpis.get('parciales', 0) or 0)}</div>
+            </div>
+            <div class="exec-mini">
+                <div class="exec-mini-label">No iniciadas</div>
+                <div class="exec-mini-value">{int(kpis.get('no_iniciadas', 0) or 0)}</div>
+            </div>
+            <div class="exec-mini">
+                <div class="exec-mini-label">HH plan / ganadas</div>
+                <div class="exec-mini-value">{float(kpis.get('hh_plan', 0) or 0):.0f} / {float(kpis.get('hh_ganadas', 0) or 0):.0f}</div>
             </div>
         </div>
         """,
@@ -4098,12 +4390,13 @@ if rol == "admin":
 
     if pagina_admin == "Dashboard general":
 
-        st.subheader("Dashboard Consolidado Quellaveco")
-
-        st.caption(
-            "Vista administrativa con selector dinámico por área. "
-            "Puede revisar Todas las áreas o ingresar al detalle "
-            "de Electricidad o Instrumentación sin cerrar sesión."
+        mostrar_titulo_ejecutivo(
+            "Dashboard Ejecutivo de Parada",
+            (
+                "Visión consolidada para seguimiento de PLAN vs REAL, "
+                "cumplimiento, alertas y desempeño operativo."
+            ),
+            "Electricidad · Instrumentación"
         )
 
         # =================================================
@@ -4284,14 +4577,8 @@ if rol == "admin":
                 )
 
                 # =========================================
-                # 4. ESTADO GENERAL DE LA PDP
+                # 4. RESUMEN EJECUTIVO DE LA PDP
                 # =========================================
-
-                st.markdown("### Estado general de la PDP")
-                st.caption(
-                    "Indicadores ejecutivos de la vista seleccionada. "
-                    "La información se actualiza con los avances registrados."
-                )
 
                 kpis_admin = compute_kpis(
                     df_actividades_admin,
@@ -4302,81 +4589,20 @@ if rol == "admin":
                     df_ots_admin
                 )
 
-                a1, a2, a3, a4, a5, a6 = st.columns(
-                    6
+                mostrar_titulo_ejecutivo(
+                    "Resumen ejecutivo",
+                    (
+                        "Indicadores clave de cumplimiento y productividad "
+                        "de la vista seleccionada."
+                    ),
+                    vista_admin
                 )
 
-                with a1:
-                    st.metric(
-                        "OTs",
-                        total_ots_admin
-                    )
-
-                with a2:
-                    st.metric(
-                        "Actividades",
-                        kpis_admin[
-                            "actividades"
-                        ]
-                    )
-
-                with a3:
-                    st.metric(
-                        "Avance general",
-                        f"{kpis_admin['avance_general']:.1f}%"
-                    )
-
-                with a4:
-                    st.metric(
-                        "Culminadas",
-                        kpis_admin[
-                            "culminadas"
-                        ]
-                    )
-
-                with a5:
-                    st.metric(
-                        "En ejecución",
-                        kpis_admin[
-                            "parciales"
-                        ]
-                    )
-
-                with a6:
-                    st.metric(
-                        "No iniciadas",
-                        kpis_admin[
-                            "no_iniciadas"
-                        ]
-                    )
-
-                b1, b2, b3, b4 = st.columns(
-                    4
+                mostrar_resumen_ejecutivo_dashboard(
+                    kpis_admin,
+                    total_ots_admin,
+                    vista_admin
                 )
-
-                with b1:
-                    st.metric(
-                        "Plan actual",
-                        f"{kpis_admin.get('avance_plan', 0):.1f}%"
-                    )
-
-                with b2:
-                    st.metric(
-                        "SPI",
-                        f"{kpis_admin['spi']:.2f}"
-                    )
-
-                with b3:
-                    st.metric(
-                        "HH planificadas",
-                        f"{kpis_admin['hh_plan']:.0f}"
-                    )
-
-                with b4:
-                    st.metric(
-                        "HH ganadas",
-                        f"{kpis_admin['hh_ganadas']:.0f}"
-                    )
 
                 st.divider()
 
@@ -4384,14 +4610,20 @@ if rol == "admin":
                 # 5. CURVA S - PLAN VS REAL
                 # =========================================
 
-                if area_id_seleccionada_admin is None:
-                    st.subheader(
-                        "Curva S consolidada - Plan vs Real"
-                    )
-                else:
-                    st.subheader(
-                        f"Curva S - {vista_admin}"
-                    )
+                titulo_curva_admin = (
+                    "Curva S consolidada · Plan vs Real"
+                    if area_id_seleccionada_admin is None
+                    else f"Curva S · {vista_admin}"
+                )
+
+                mostrar_titulo_ejecutivo(
+                    titulo_curva_admin,
+                    (
+                        "Cortes oficiales 00:00 · 07:00 · 14:00 · 19:00, "
+                        "más punto de avance en vivo durante la ejecución."
+                    ),
+                    "Control de avance"
+                )
 
                 curva_admin = build_s_curve(
                     df_actividades_admin,
@@ -4477,13 +4709,18 @@ if rol == "admin":
                         )
 
                     figura_curva_admin.update_layout(
-                        height=520,
+                        height=500,
                         hovermode="x unified",
+                        paper_bgcolor="#FFFFFF",
+                        plot_bgcolor="#FFFFFF",
+                        font=dict(color="#344054", size=12),
                         xaxis=dict(
                             title="Fecha / hora",
                             tickformat="%d/%m\n%H:%M",
                             showgrid=True,
-                            gridwidth=1
+                            gridwidth=1,
+                            gridcolor="#EEF2F6",
+                            linecolor="#D0D5DD"
                         ),
                         yaxis=dict(
                             title="Acumulado (%)",
@@ -4492,6 +4729,8 @@ if rol == "admin":
                             ticksuffix="%",
                             showgrid=True,
                             gridwidth=1,
+                            gridcolor="#EEF2F6",
+                            linecolor="#D0D5DD",
                             zeroline=False
                         ),
                         legend=dict(
@@ -4524,11 +4763,13 @@ if rol == "admin":
                 # 6. SEMÁFORO EJECUTIVO
                 # =========================================
 
-                st.markdown("### Semáforo ejecutivo")
-                st.caption(
-                    "Clasificación automática por desviación PLAN vs REAL, "
-                    "criticidad y vencimiento. Se muestran primero las "
-                    "situaciones que requieren decisión gerencial."
+                mostrar_titulo_ejecutivo(
+                    "Semáforo ejecutivo",
+                    (
+                        "Priorización automática por desviación PLAN vs REAL, "
+                        "criticidad y vencimiento."
+                    ),
+                    "Foco gerencial"
                 )
 
                 estado_semaforo_admin = build_activity_status(
@@ -5007,14 +5248,17 @@ if rol == "admin":
                 # 7. COMPARATIVO POR ÁREA
                 # =========================================
 
-                if area_id_seleccionada_admin is None:
-                    st.subheader(
-                        "Comparativo por área"
-                    )
-                else:
-                    st.subheader(
-                        f"Indicadores de {vista_admin}"
-                    )
+                titulo_comparativo_admin = (
+                    "Comparativo por área"
+                    if area_id_seleccionada_admin is None
+                    else f"Indicadores · {vista_admin}"
+                )
+
+                mostrar_titulo_ejecutivo(
+                    titulo_comparativo_admin,
+                    "Comparación de PLAN, REAL, SPI, HH y estado de actividades.",
+                    "Benchmark interno"
+                )
 
                 resumen_areas = []
 
@@ -5200,19 +5444,19 @@ if rol == "admin":
                 # 8. DESEMPEÑO POR SUPERVISOR
                 # =========================================
 
-                if area_id_seleccionada_admin is None:
-                    st.subheader(
-                        "Desempeño por Supervisor - Todas las áreas"
-                    )
-                else:
-                    st.subheader(
-                        f"Desempeño por Supervisor - {vista_admin}"
-                    )
+                titulo_supervisor_admin = (
+                    "Desempeño por Supervisor · Todas las áreas"
+                    if area_id_seleccionada_admin is None
+                    else f"Desempeño por Supervisor · {vista_admin}"
+                )
 
-                st.caption(
-                    "Seguimiento gerencial del cumplimiento y disciplina "
-                    "de reporte por supervisor. Las actividades futuras "
-                    "todavía no iniciadas no se consideran como falta de reporte."
+                mostrar_titulo_ejecutivo(
+                    titulo_supervisor_admin,
+                    (
+                        "Cumplimiento, desviación y disciplina de reporte por responsable. "
+                        "Las actividades futuras no penalizan el indicador."
+                    ),
+                    "Disciplina operativa"
                 )
 
                 estado_supervisor_admin = build_activity_status(
