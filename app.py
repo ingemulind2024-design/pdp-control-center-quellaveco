@@ -38,8 +38,308 @@ from supabase import create_client
 st.set_page_config(
     page_title="PDP Control Center Quellaveco - MAININ",
     page_icon="📊",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
+
+
+# =====================================================
+# IDENTIDAD VISUAL PROFESIONAL - PDP QUELLAVECO
+# =====================================================
+
+def aplicar_estilo_profesional():
+    st.markdown(
+        """
+        <style>
+        :root {
+            --mainin-navy: #12345B;
+            --mainin-navy-2: #0B2747;
+            --mainin-red: #E64A4A;
+            --mainin-bg: #F5F7FA;
+            --mainin-card: #FFFFFF;
+            --mainin-border: #E2E8F0;
+            --mainin-text: #1F2937;
+            --mainin-muted: #667085;
+            --mainin-green: #147D64;
+            --mainin-amber: #B7791F;
+        }
+
+        /* Fondo general */
+        [data-testid="stAppViewContainer"] {
+            background: var(--mainin-bg);
+        }
+
+        [data-testid="stMain"] {
+            background: var(--mainin-bg);
+        }
+
+        .block-container {
+            padding-top: 1.35rem;
+            padding-bottom: 3rem;
+            max-width: 1500px;
+        }
+
+        /* Sidebar */
+        [data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
+            border-right: 1px solid var(--mainin-border);
+        }
+
+        [data-testid="stSidebar"] .block-container {
+            padding-top: 1rem;
+        }
+
+        /* Títulos */
+        h1, h2, h3 {
+            color: var(--mainin-navy-2) !important;
+            letter-spacing: -0.02em;
+        }
+
+        h1 {
+            font-weight: 800 !important;
+        }
+
+        h2, h3 {
+            font-weight: 750 !important;
+        }
+
+        /* Formularios */
+        [data-testid="stForm"] {
+            background: var(--mainin-card);
+            border: 1px solid var(--mainin-border);
+            border-radius: 16px;
+            padding: 1.15rem 1.2rem 1.2rem 1.2rem;
+            box-shadow: 0 5px 18px rgba(15, 39, 71, 0.05);
+        }
+
+        [data-baseweb="input"] > div,
+        [data-baseweb="textarea"] > div,
+        [data-baseweb="select"] > div {
+            border-radius: 10px !important;
+        }
+
+        /* Botones */
+        .stButton > button,
+        [data-testid="stFormSubmitButton"] > button,
+        .stDownloadButton > button {
+            border-radius: 10px !important;
+            min-height: 42px;
+            font-weight: 700 !important;
+            border: 1px solid #D0D5DD !important;
+            transition: all .16s ease-in-out;
+        }
+
+        .stButton > button:hover,
+        [data-testid="stFormSubmitButton"] > button:hover,
+        .stDownloadButton > button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 5px 12px rgba(15, 39, 71, 0.10);
+        }
+
+        button[kind="primary"],
+        [data-testid="stFormSubmitButton"] button[kind="primary"] {
+            background: var(--mainin-red) !important;
+            border-color: var(--mainin-red) !important;
+            color: white !important;
+        }
+
+        /* Métricas */
+        [data-testid="stMetric"] {
+            background: var(--mainin-card);
+            border: 1px solid var(--mainin-border);
+            border-radius: 14px;
+            padding: 0.8rem 0.9rem;
+            box-shadow: 0 4px 14px rgba(15, 39, 71, 0.045);
+        }
+
+        [data-testid="stMetricLabel"] {
+            color: var(--mainin-muted) !important;
+            font-weight: 650 !important;
+        }
+
+        [data-testid="stMetricValue"] {
+            color: var(--mainin-navy-2) !important;
+            font-weight: 800 !important;
+        }
+
+        /* Alertas */
+        [data-testid="stAlert"] {
+            border-radius: 12px;
+            border-width: 1px;
+        }
+
+        /* Dataframes */
+        [data-testid="stDataFrame"] {
+            border: 1px solid var(--mainin-border);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 14px rgba(15, 39, 71, 0.04);
+        }
+
+        /* Divisores */
+        hr {
+            border-color: #E6EBF1 !important;
+            margin-top: 1.2rem !important;
+            margin-bottom: 1.2rem !important;
+        }
+
+        /* Radio del menú lateral */
+        [data-testid="stSidebar"] [role="radiogroup"] label {
+            padding: 0.42rem 0.55rem;
+            border-radius: 9px;
+            margin-bottom: 0.12rem;
+        }
+
+        [data-testid="stSidebar"] [role="radiogroup"] label:hover {
+            background: #EEF3F8;
+        }
+
+        /* Tarjetas propias */
+        .mainin-header {
+            background: linear-gradient(110deg, #0B2747 0%, #123F70 72%, #174F87 100%);
+            border-radius: 18px;
+            padding: 22px 26px;
+            margin-bottom: 1.35rem;
+            color: white;
+            box-shadow: 0 10px 28px rgba(11, 39, 71, 0.14);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .mainin-header:after {
+            content: "";
+            position: absolute;
+            width: 210px;
+            height: 210px;
+            right: -65px;
+            top: -95px;
+            border-radius: 50%;
+            background: rgba(255,255,255,.06);
+        }
+
+        .mainin-kicker {
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: .11em;
+            text-transform: uppercase;
+            color: #D8E6F3;
+            margin-bottom: 7px;
+        }
+
+        .mainin-title {
+            font-size: clamp(26px, 3.2vw, 43px);
+            line-height: 1.08;
+            font-weight: 850;
+            margin: 0 0 8px 0;
+            color: white;
+        }
+
+        .mainin-subtitle {
+            font-size: 14px;
+            color: #D9E3EE;
+            margin: 0;
+            max-width: 850px;
+        }
+
+        .mainin-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            margin-top: 14px;
+            padding: 6px 10px;
+            border: 1px solid rgba(255,255,255,.18);
+            border-radius: 999px;
+            background: rgba(255,255,255,.08);
+            font-size: 12px;
+            font-weight: 700;
+            color: white;
+        }
+
+        .mainin-status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4ADE80;
+            box-shadow: 0 0 0 3px rgba(74, 222, 128, .15);
+        }
+
+        .sidebar-user-card {
+            border: 1px solid var(--mainin-border);
+            border-radius: 14px;
+            background: white;
+            padding: 12px 13px;
+            margin: 8px 0 10px 0;
+            box-shadow: 0 3px 10px rgba(15, 39, 71, 0.04);
+        }
+
+        .sidebar-user-name {
+            color: var(--mainin-navy-2);
+            font-weight: 800;
+            font-size: 14px;
+            margin-bottom: 7px;
+        }
+
+        .sidebar-pill {
+            display: inline-block;
+            padding: 4px 8px;
+            margin: 2px 3px 2px 0;
+            border-radius: 999px;
+            background: #EEF4FB;
+            color: #164C7E;
+            font-size: 11px;
+            font-weight: 750;
+        }
+
+        .section-card {
+            background: white;
+            border: 1px solid var(--mainin-border);
+            border-radius: 14px;
+            padding: 15px 17px;
+            margin: 0.5rem 0 1rem 0;
+            box-shadow: 0 4px 14px rgba(15, 39, 71, 0.04);
+        }
+
+        /* Ocultar menú técnico de Streamlit para una apariencia más limpia */
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+
+        @media (max-width: 768px) {
+            .block-container {
+                padding-left: 0.8rem;
+                padding-right: 0.8rem;
+            }
+            .mainin-header {
+                border-radius: 14px;
+                padding: 18px;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+def mostrar_header_profesional(
+    subtitulo="Sistema integrado de seguimiento y control de la Parada de Planta",
+    estado="Sistema operativo"
+):
+    st.markdown(
+        f"""
+        <div class="mainin-header">
+            <div class="mainin-kicker">MAININ · CONTROL DE PROYECTOS</div>
+            <div class="mainin-title">PDP CONTROL CENTER · QUELLAVECO</div>
+            <p class="mainin-subtitle">{subtitulo}</p>
+            <div class="mainin-status">
+                <span class="mainin-status-dot"></span>
+                {estado}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+aplicar_estilo_profesional()
 
 # =====================================================
 # CONEXIÓN SUPABASE
@@ -3617,15 +3917,16 @@ if "usuario_logueado" not in st.session_state:
 
 if st.session_state["usuario_logueado"] is None:
 
-    st.title("PDP CONTROL CENTER QUELLAVECO - MAININ")
-
-    st.caption(
-        "Sistema integrado de seguimiento y control de la Parada de Planta"
+    mostrar_header_profesional(
+        subtitulo=(
+            "Gestión integrada de planificación, avance, evidencias y reportabilidad "
+            "de la Parada de Planta"
+        ),
+        estado="Acceso seguro"
     )
 
-    st.divider()
-
     st.subheader("Acceso al sistema")
+    st.caption("Ingrese sus credenciales corporativas para continuar.")
 
     username = st.text_input(
         "Usuario",
@@ -3718,13 +4019,6 @@ mostrar_logo_mainin_sidebar()
 
 with st.sidebar:
 
-    st.divider()
-
-    st.write("Usuario:")
-    st.success(usuario["nombre"])
-
-    st.write("Rol:")
-
     nombre_rol_sidebar = {
         "admin": "ADMIN",
         "planner": "PLANNER",
@@ -3735,16 +4029,22 @@ with st.sidebar:
         rol.upper()
     )
 
-    st.info(nombre_rol_sidebar)
+    area_sidebar = (
+        "TODAS LAS ÁREAS"
+        if rol == "admin"
+        else nombre_area
+    )
 
-    st.write("Área:")
-
-    if rol == "admin":
-        st.warning("TODAS LAS ÁREAS")
-    else:
-        st.info(nombre_area)
-
-    st.divider()
+    st.markdown(
+        f"""
+        <div class="sidebar-user-card">
+            <div class="sidebar-user-name">{usuario['nombre']}</div>
+            <span class="sidebar-pill">{nombre_rol_sidebar}</span>
+            <span class="sidebar-pill">{area_sidebar}</span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
     if st.button(
         "Cerrar sesión",
@@ -3758,13 +4058,13 @@ with st.sidebar:
 # PANTALLA PRINCIPAL
 # =====================================================
 
-st.title("PDP CONTROL CENTER QUELLAVECO - MAININ")
-
-st.caption(
-    "Sistema integrado de seguimiento y control de la Parada de Planta"
+mostrar_header_profesional(
+    subtitulo=(
+        "Seguimiento ejecutivo y operativo de Electricidad e Instrumentación · "
+        f"Sesión: {usuario.get('nombre', '')}"
+    ),
+    estado=f"Área: {nombre_area}"
 )
-
-st.divider()
 
 
 # =====================================================
