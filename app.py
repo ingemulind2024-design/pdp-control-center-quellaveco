@@ -39,7 +39,7 @@ st.set_page_config(
     page_title="PDP Control Center Quellaveco - MAININ",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="auto"
 )
 
 
@@ -507,28 +507,69 @@ def aplicar_estilo_profesional():
         .exec-mini-label { color:#748295; font-size:8.8px; font-weight:800; text-transform:uppercase; letter-spacing:.07em; }
         .exec-mini-value { color:#173A5E; font-size:17px; font-weight:850; margin-top:2px; }
 
-        /* Login premium */
-        .login-hero {
-            min-height: 310px;
-            border-radius: 18px;
-            padding: 26px 26px 24px;
-            background: linear-gradient(145deg,#061827 0%,#0B2747 56%,#114D79 100%);
-            color:#FFF;
-            box-shadow: 0 16px 40px rgba(6,24,39,.17);
-            position:relative;
-            overflow:hidden;
+        /* Login compacto · pensado primero para celular */
+        .login-brand {
+            max-width: 460px;
+            margin: 2.2vh auto 12px;
+            text-align: center;
+            padding: 0 12px;
         }
-        .login-hero:after {
-            content:""; position:absolute; width:260px; height:260px; border-radius:50%;
-            right:-105px; bottom:-125px; background:rgba(14,165,233,.14);
+        .login-brand-kicker {
+            display:inline-flex;
+            align-items:center;
+            gap:7px;
+            padding:5px 9px;
+            border-radius:999px;
+            background:#EAF2FF;
+            border:1px solid #CFDDF7;
+            color:#174EA6;
+            font-size:9px;
+            font-weight:850;
+            letter-spacing:.10em;
+            text-transform:uppercase;
         }
-        .login-kicker { font-size:10px; font-weight:850; letter-spacing:.15em; color:#9CC7E8; text-transform:uppercase; }
-        .login-title { font-size:31px; line-height:1.05; font-weight:880; letter-spacing:-.035em; margin:10px 0 10px; color:#FFF; }
-        .login-copy { color:#C8D8E7; font-size:12px; max-width:520px; line-height:1.55; }
-        .login-feature { display:flex; align-items:center; gap:9px; margin-top:11px; color:#E7F0F8; font-size:11px; font-weight:650; }
-        .login-feature span { width:7px; height:7px; border-radius:2px; background:#45B8F5; box-shadow:0 0 0 4px rgba(69,184,245,.10); }
-        .login-form-title { font-size:21px; color:var(--ink); font-weight:850; margin-bottom:3px; }
-        .login-form-copy { color:#667085; font-size:11px; margin-bottom:12px; }
+        .login-brand-title {
+            color:var(--ink);
+            font-size:30px;
+            line-height:1.04;
+            font-weight:880;
+            letter-spacing:-.035em;
+            margin:10px 0 5px;
+        }
+        .login-brand-sub {
+            color:#667085;
+            font-size:11.5px;
+            line-height:1.35;
+            margin:0;
+        }
+        .login-form-title {
+            font-size:19px;
+            line-height:1.1;
+            color:var(--ink);
+            font-weight:850;
+            margin-bottom:2px;
+        }
+        .login-form-copy {
+            color:#7A8795;
+            font-size:10.5px;
+            margin-bottom:8px;
+        }
+        .login-secure {
+            display:flex;
+            justify-content:center;
+            align-items:center;
+            gap:6px;
+            color:#667085;
+            font-size:9.5px;
+            margin-top:8px;
+        }
+        .login-secure-dot {
+            width:6px;
+            height:6px;
+            border-radius:50%;
+            background:#12B76A;
+            box-shadow:0 0 0 3px rgba(18,183,106,.10);
+        }
 
         #MainMenu { visibility:hidden; }
         footer { visibility:hidden; }
@@ -537,14 +578,267 @@ def aplicar_estilo_profesional():
             .exec-kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
             .exec-mini-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
         }
+
+        /* MOBILE UX: menos scroll, mejor lectura y controles táctiles */
         @media (max-width: 768px) {
-            .block-container { padding-left:.75rem; padding-right:.75rem; }
-            .mainin-header { border-radius:15px; padding:16px; }
-            .mainin-head-top { align-items:flex-start; flex-direction:column; }
-            .mainin-title { font-size:26px; }
-            .executive-title-row { align-items:flex-start; flex-direction:column; }
-            .exec-kpi-grid { grid-template-columns:1fr; }
-            .exec-mini-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+            .block-container {
+                padding-top:.55rem;
+                padding-left:.62rem;
+                padding-right:.62rem;
+                padding-bottom:1.6rem;
+            }
+
+            [data-testid="stSidebar"] {
+                width:min(86vw, 292px) !important;
+            }
+
+            [data-testid="stSidebar"] .block-container {
+                padding:.55rem .65rem 1rem;
+            }
+
+            [data-testid="stSidebar"] [role="radiogroup"] label {
+                min-height:42px;
+                display:flex;
+                align-items:center;
+                padding:.48rem .58rem;
+                margin:.10rem 0;
+                border-radius:9px;
+            }
+
+            .stButton > button,
+            [data-testid="stFormSubmitButton"] > button,
+            .stDownloadButton > button {
+                min-height:46px !important;
+                border-radius:12px !important;
+                font-size:13px !important;
+            }
+
+            [data-baseweb="input"] > div,
+            [data-baseweb="textarea"] > div,
+            [data-baseweb="select"] > div {
+                min-height:44px;
+                border-radius:10px !important;
+            }
+
+            [data-testid="stForm"] {
+                padding:.82rem .82rem .92rem;
+                border-radius:14px !important;
+            }
+
+            [data-testid="stMetric"] {
+                padding:.70rem .72rem;
+                border-radius:12px;
+            }
+
+            [data-testid="stMetricLabel"] {
+                font-size:10px !important;
+            }
+
+            [data-testid="stMetricValue"] {
+                font-size:22px !important;
+            }
+
+            hr {
+                margin-top:.72rem !important;
+                margin-bottom:.72rem !important;
+            }
+
+            .mainin-header {
+                border-radius:14px;
+                padding:11px 12px 10px;
+                margin-bottom:.65rem;
+                box-shadow:0 8px 22px rgba(6,24,39,.13);
+            }
+
+            .mainin-head-top {
+                margin-bottom:6px;
+                gap:7px;
+            }
+
+            .mainin-kicker {
+                font-size:8px;
+                letter-spacing:.09em;
+                gap:5px;
+            }
+
+            .mainin-kicker:before {
+                width:12px;
+            }
+
+            .mainin-status {
+                padding:4px 7px;
+                font-size:8.5px;
+            }
+
+            .mainin-status-dot {
+                width:6px;
+                height:6px;
+                box-shadow:0 0 0 3px rgba(50,213,131,.10);
+            }
+
+            .mainin-title {
+                font-size:20px;
+                line-height:1.08;
+                margin-bottom:3px;
+                letter-spacing:-.025em;
+            }
+
+            .mainin-subtitle {
+                display:none;
+            }
+
+            .mainin-area-row {
+                gap:4px;
+                margin-top:7px;
+            }
+
+            .mainin-chip {
+                padding:4px 6px;
+                border-radius:7px;
+                font-size:8px;
+            }
+
+            .mainin-chip:nth-child(3) {
+                display:none;
+            }
+
+            .executive-title-row {
+                align-items:flex-start;
+                flex-direction:column;
+                gap:5px;
+                margin:.1rem 0 .52rem;
+            }
+
+            .executive-title {
+                font-size:19px;
+                line-height:1.12;
+            }
+
+            .executive-subtitle {
+                font-size:10.5px;
+                line-height:1.35;
+                margin-top:2px;
+            }
+
+            .executive-badge {
+                padding:4px 7px;
+                font-size:8.5px;
+            }
+
+            .exec-meta-line {
+                gap:4px;
+                margin:.10rem 0 .50rem;
+            }
+
+            .exec-meta-pill {
+                padding:4px 6px;
+                border-radius:7px;
+                font-size:8.5px;
+            }
+
+            .exec-kpi-grid {
+                grid-template-columns:repeat(2,minmax(0,1fr));
+                gap:7px;
+                margin:.12rem 0 .55rem;
+            }
+
+            .exec-kpi-card {
+                border-radius:12px;
+                padding:10px 10px 9px 12px;
+                box-shadow:0 5px 14px rgba(11,31,51,.045);
+            }
+
+            .exec-kpi-label {
+                font-size:8px;
+                margin-bottom:4px;
+                letter-spacing:.055em;
+            }
+
+            .exec-kpi-value {
+                font-size:21px;
+            }
+
+            .exec-kpi-foot {
+                font-size:8.5px;
+                margin-top:4px;
+                min-height:12px;
+                line-height:1.2;
+            }
+
+            .exec-mini-grid {
+                grid-template-columns:repeat(2,minmax(0,1fr));
+                gap:6px;
+                margin:.10rem 0 .55rem;
+            }
+
+            .exec-mini {
+                border-radius:10px;
+                padding:7px 8px;
+            }
+
+            .exec-mini-label { font-size:7.8px; }
+            .exec-mini-value { font-size:15px; }
+
+            [data-testid="stPlotlyChart"] {
+                border-radius:12px;
+                padding:2px 2px 0;
+                box-shadow:0 4px 14px rgba(11,31,51,.04);
+            }
+
+            [data-testid="stDataFrame"] {
+                border-radius:11px;
+                box-shadow:none;
+            }
+
+            [data-testid="stFileUploader"] {
+                padding:5px;
+                border-radius:11px;
+            }
+
+            [data-testid="stExpander"] {
+                border-radius:11px !important;
+                box-shadow:none;
+            }
+
+            .login-brand {
+                margin:.9rem auto 8px;
+            }
+
+            .login-brand-kicker {
+                font-size:8px;
+                padding:4px 7px;
+            }
+
+            .login-brand-title {
+                font-size:24px;
+                margin:8px 0 3px;
+            }
+
+            .login-brand-sub {
+                font-size:10.5px;
+            }
+
+            .login-form-title {
+                font-size:18px;
+            }
+
+            .login-form-copy {
+                font-size:10px;
+                margin-bottom:6px;
+            }
+        }
+
+        @media (max-width: 420px) {
+            .block-container {
+                padding-left:.48rem;
+                padding-right:.48rem;
+            }
+
+            .mainin-title { font-size:18px; }
+            .mainin-chip { font-size:7.7px; }
+            .exec-kpi-value { font-size:20px; }
+            .exec-kpi-foot { display:none; }
+            .login-brand-title { font-size:22px; }
         }
         </style>
         """,
@@ -4270,101 +4564,108 @@ if "usuario_logueado" not in st.session_state:
 
 if st.session_state["usuario_logueado"] is None:
 
-    mostrar_header_profesional(
-        subtitulo=(
-            "Gestión integrada de planificación, avance, evidencias y reportabilidad "
-            "de la Parada de Planta"
-        ),
-        estado="Acceso seguro"
+    # Login deliberadamente compacto: una sola tarea por pantalla.
+    st.markdown(
+        """
+        <style>
+        [data-testid="stVerticalBlockBorderWrapper"] {
+            max-width: 430px;
+            margin-left: auto !important;
+            margin-right: auto !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
     )
 
-    col_login_info, col_login_form = st.columns([1.18, 0.82], gap="large")
+    st.markdown(
+        """
+        <div class="login-brand">
+            <div class="login-brand-kicker">MAININ · QUELLAVECO</div>
+            <div class="login-brand-title">PDP Control Center</div>
+            <p class="login-brand-sub">Electricidad · Instrumentación</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
-    with col_login_info:
+    with st.container(border=True):
+
         st.markdown(
             """
-            <div class="login-hero">
-                <div class="login-kicker">CONTROL OPERATIVO DE PARADA</div>
-                <div class="login-title">Decisiones rápidas.<br>Datos claros.</div>
-                <div class="login-copy">
-                    Un entorno único para controlar planificación, cumplimiento,
-                    avances de campo, evidencias y alertas de Electricidad e Instrumentación.
-                </div>
-                <div class="login-feature"><span></span> Curva S y desviación PLAN vs REAL</div>
-                <div class="login-feature"><span></span> Seguimiento por OT, actividad y supervisor</div>
-                <div class="login-feature"><span></span> Evidencias fotográficas y reportes ejecutivos</div>
-            </div>
+            <div class="login-form-title">Ingresar</div>
+            <div class="login-form-copy">Acceso corporativo</div>
             """,
             unsafe_allow_html=True
         )
 
-    with col_login_form:
-        with st.container(border=True):
-            st.markdown(
-                """
-                <div class="login-form-title">Acceso al sistema</div>
-                <div class="login-form-copy">Ingrese sus credenciales corporativas para continuar.</div>
-                """,
-                unsafe_allow_html=True
-            )
+        username = st.text_input(
+            "Usuario",
+            placeholder="Usuario"
+        )
 
-            username = st.text_input(
-                "Usuario",
-                placeholder="Ingrese su usuario"
-            )
+        password = st.text_input(
+            "Contraseña",
+            type="password",
+            placeholder="Contraseña"
+        )
 
-            password = st.text_input(
-                "Contraseña",
-                type="password",
-                placeholder="Ingrese su contraseña"
-            )
+        if st.button(
+            "Ingresar",
+            type="primary",
+            use_container_width=True
+        ):
 
-            if st.button(
-                "Ingresar al Control Center",
-                type="primary",
-                use_container_width=True
-            ):
+            usuario = obtener_usuario(username.strip())
 
-                usuario = obtener_usuario(username.strip())
+            if usuario is None:
+                st.error("Usuario no encontrado o inactivo.")
 
-                if usuario is None:
-                    st.error("Usuario no encontrado o inactivo.")
+            else:
 
-                else:
+                rol_login = normalizar_rol(
+                    usuario.get("rol")
+                )
 
-                    rol_login = normalizar_rol(
-                        usuario.get("rol")
+                if rol_login not in ROLES_PERMITIDOS:
+                    st.error(
+                        "El usuario tiene un rol no permitido. "
+                        "Contacte al administrador."
                     )
 
-                    if rol_login not in ROLES_PERMITIDOS:
-                        st.error(
-                            "El usuario tiene un rol no permitido. "
-                            "Contacte al administrador."
-                        )
+                elif (
+                    rol_login != "admin"
+                    and not usuario.get("area_id")
+                ):
+                    st.error(
+                        "El usuario no tiene un área asignada."
+                    )
 
-                    elif (
-                        rol_login != "admin"
-                        and not usuario.get("area_id")
-                    ):
-                        st.error(
-                            "El usuario no tiene un área asignada."
-                        )
+                elif verificar_contrasena(
+                    password.strip(),
+                    usuario.get("password_hash")
+                ):
 
-                    elif verificar_contrasena(
-                        password.strip(),
-                        usuario.get("password_hash")
-                    ):
+                    usuario["rol"] = rol_login
 
-                        usuario["rol"] = rol_login
+                    st.session_state[
+                        "usuario_logueado"
+                    ] = usuario
 
-                        st.session_state[
-                            "usuario_logueado"
-                        ] = usuario
+                    st.rerun()
 
-                        st.rerun()
+                else:
+                    st.error("Contraseña incorrecta.")
 
-                    else:
-                        st.error("Contraseña incorrecta.")
+        st.markdown(
+            """
+            <div class="login-secure">
+                <span class="login-secure-dot"></span>
+                Sesión segura
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
     st.stop()
 
