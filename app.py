@@ -573,8 +573,27 @@ def aplicar_estilo_profesional():
 
         #MainMenu { visibility:hidden; }
         footer { visibility:hidden; }
-        header[data-testid="stHeader"] { background: transparent; }
-        [data-testid="stToolbar"] { visibility:visible !important; }
+        /* Mantener el control lateral disponible sin convertir
+           la barra nativa de Streamlit en protagonista. */
+        header[data-testid="stHeader"] {
+            display:block !important;
+            visibility:visible !important;
+            background:transparent !important;
+            z-index:999990 !important;
+        }
+
+        [data-testid="stToolbar"] {
+            display:flex !important;
+            visibility:visible !important;
+            opacity:1 !important;
+        }
+
+        /* Ocultar enlaces accesorios como Fork / GitHub,
+           pero conservar los controles internos necesarios. */
+        header[data-testid="stHeader"] a {
+            display:none !important;
+        }
+
         [data-testid="stDecoration"] { display:none !important; }
         .stAppDeployButton { display:none !important; }
 
@@ -634,52 +653,87 @@ def aplicar_estilo_profesional():
         }
 
         /* ==================================================
-           NAVEGACIÓN MÓVIL · mantener acceso al sidebar
+           NAVEGACIÓN RESPONSIVE · sidebar siempre recuperable
            ================================================== */
-        [data-testid="stSidebarCollapsedControl"] {
+
+        /* Compatibilidad con distintas versiones de Streamlit. */
+        [data-testid="stSidebarCollapsedControl"],
+        [data-testid="collapsedControl"] {
             display:flex !important;
             visibility:visible !important;
             opacity:1 !important;
-            z-index:999999 !important;
+            position:fixed !important;
+            top:9px !important;
+            left:10px !important;
+            width:42px !important;
+            height:42px !important;
+            z-index:1000005 !important;
+            pointer-events:auto !important;
         }
 
-        [data-testid="stSidebarCollapsedControl"] button {
+        [data-testid="stSidebarCollapsedControl"] button,
+        [data-testid="collapsedControl"] button {
+            display:flex !important;
+            align-items:center !important;
+            justify-content:center !important;
+            width:42px !important;
+            min-width:42px !important;
+            height:42px !important;
+            min-height:42px !important;
+            padding:0 !important;
             border:1px solid #D7E2EC !important;
-            background:#FFFFFF !important;
+            background:rgba(255,255,255,.97) !important;
             color:#0B1F33 !important;
-            border-radius:11px !important;
-            box-shadow:0 6px 18px rgba(11,31,51,.12) !important;
+            border-radius:12px !important;
+            box-shadow:0 7px 20px rgba(11,31,51,.14) !important;
+            backdrop-filter:blur(10px);
         }
 
+        [data-testid="stSidebarCollapsedControl"] svg,
+        [data-testid="collapsedControl"] svg {
+            color:#0B1F33 !important;
+            fill:currentColor !important;
+            width:20px !important;
+            height:20px !important;
+        }
+
+        /* El control de cierre dentro del sidebar también debe ser táctil. */
         [data-testid="stSidebarCollapseButton"] button {
+            min-width:38px !important;
+            min-height:38px !important;
             border-radius:10px !important;
+        }
+
+        /* En escritorio dejamos una zona segura para que el botón
+           de reapertura no se pierda detrás del contenido. */
+        @media (min-width: 769px) {
+            header[data-testid="stHeader"] {
+                height:54px !important;
+            }
+
+            .block-container {
+                padding-top:1.15rem;
+            }
+
+            [data-testid="stSidebarCollapsedControl"],
+            [data-testid="collapsedControl"] {
+                top:8px !important;
+                left:12px !important;
+            }
         }
 
         /* MOBILE UX: menos scroll, mejor lectura y controles táctiles */
         @media (max-width: 768px) {
-            /* Botón hamburguesa siempre visible en celular */
-            [data-testid="stSidebarCollapsedControl"] {
-                position:fixed !important;
-                top:8px !important;
-                left:8px !important;
-                width:42px !important;
-                height:42px !important;
-            }
 
-            [data-testid="stSidebarCollapsedControl"] button {
-                width:42px !important;
-                height:42px !important;
-                min-height:42px !important;
-                padding:0 !important;
-            }
-
-            /* Conserva una franja mínima para no tapar el contenido */
+            /* La cabecera nativa queda como una franja técnica mínima.
+               El contenido empieza DESPUÉS de ella para que nunca tape
+               el título de PDP Control Center. */
             header[data-testid="stHeader"] {
                 display:block !important;
-                height:50px !important;
-                background:rgba(248,250,252,.94) !important;
-                backdrop-filter:blur(10px);
-                border-bottom:1px solid rgba(221,229,238,.75);
+                height:52px !important;
+                background:rgba(248,250,252,.96) !important;
+                backdrop-filter:blur(12px);
+                border-bottom:1px solid rgba(221,229,238,.78);
                 z-index:999990 !important;
             }
 
@@ -689,14 +743,53 @@ def aplicar_estilo_profesional():
                 opacity:1 !important;
             }
 
+            /* Botón de navegación: siempre visible y con zona táctil real. */
+            [data-testid="stSidebarCollapsedControl"],
+            [data-testid="collapsedControl"] {
+                top:5px !important;
+                left:8px !important;
+                width:42px !important;
+                height:42px !important;
+            }
+
+            [data-testid="stSidebarCollapsedControl"] button,
+            [data-testid="collapsedControl"] button {
+                width:42px !important;
+                height:42px !important;
+                min-height:42px !important;
+                padding:0 !important;
+            }
+
             .stAppDeployButton { display:none !important; }
 
+            /* 52 px de cabecera + respiración visual.
+               Esto elimina el solapamiento observado en celular. */
             .block-container {
-                padding-top:.55rem;
+                padding-top:3.65rem !important;
                 padding-left:.62rem;
                 padding-right:.62rem;
                 padding-bottom:1.6rem;
             }
+
+            /* Cuando el sidebar está abierto, no necesita el espacio
+               superior extra del contenido principal. */
+            [data-testid="stSidebar"] .block-container {
+                padding-top:.65rem !important;
+            }
+
+            /* El primer encabezado del aplicativo respira debajo
+               del botón de navegación y se mantiene completamente visible. */
+            .app-topbar {
+                margin-top:0 !important;
+                position:relative;
+                z-index:1;
+            }
+
+            .page-intro {
+                position:relative;
+                z-index:1;
+            }
+
 
             [data-testid="stSidebar"] {
                 width:min(86vw, 292px) !important;
