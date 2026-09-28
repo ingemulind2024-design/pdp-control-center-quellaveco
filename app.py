@@ -3,6 +3,7 @@ import hashlib
 import hmac
 from pathlib import Path
 import uuid
+import unicodedata
 
 import streamlit as st
 import pandas as pd
@@ -118,6 +119,466 @@ def limpiar_fecha(valor):
         return fecha.strftime("%Y-%m-%dT%H:%M:%S")
     except Exception:
         return None
+
+
+
+# =====================================================
+# TRATAMIENTO AUTOMÁTICO MANPOWER -> PDP QUELLAVECO
+# =====================================================
+
+def _normalizar_columna_manpower(nombre):
+    texto = str(nombre or "").replace("\n", " ").strip().upper()
+    texto = unicodedata.normalize("NFKD", texto)
+    texto = "".join(
+        caracter
+        for caracter in texto
+        if not unicodedata.combining(caracter)
+    )
+    return " ".join(texto.split())
+
+
+def _mapa_columnas_manpower(df):
+    mapa = {}
+    for columna in df.columns:
+        clave = _normalizar_columna_manpower(columna)
+        if clave and clave not in mapa:
+            mapa[clave] = columna
+    return mapa
+
+
+def _texto_manpower(valor):
+    if pd.isna(valor):
+        return None
+    texto = str(valor).strip()
+    if not texto or texto.lower() == "nan":
+        return None
+    return texto
+
+
+def _ot_manpower(valor):
+    if pd.isna(valor):
+        return None
+
+    if isinstance(valor, (int, np.integer)):
+        return str(int(valor))
+
+    if isinstance(valor, (float, np.floating)):
+        if np.isnan(valor):
+            return None
+        if float(valor).is_integer():
+            return str(int(valor))
+
+    texto = str(valor).strip()
+    if not texto or texto.lower() == "nan":
+        return None
+
+    if texto.endswith(".0"):
+        parte = texto[:-2]
+        if parte.replace("-", "").isdigit():
+            return parte
+
+    return texto
+
+
+def _numero_manpower(valor, entero=False):
+    if pd.isna(valor):
+        return None
+    try:
+        numero = float(valor)
+        if np.isnan(numero):
+            return None
+        return int(round(numero)) if entero else numero
+    except Exception:
+        return None
+
+
+def _fecha_manpower(valor):
+    if pd.isna(valor):
+        return pd.NaT
+
+    if isinstance(valor, (int, float, np.integer, np.floating)):
+        try:
+            return (
+                pd.Timestamp("1899-12-30")
+                + pd.to_timedelta(float(valor), unit="D")
+            )
+        except Exception:
+            return pd.NaT
+
+    return pd.to_datetime(valor, errors="coerce")
+
+
+def _valor_columna_manpower(row, mapa, nombre_normalizado):
+    columna = mapa.get(nombre_normalizado)
+    if columna is None:
+        return None
+    return row.get(columna)
+
+
+def convertir_hoja_manpower(
+    archivo_bytes,
+    hoja_fuente,
+    empresa_objetivo,
+    prefijo_actividad,
+    nombre_area
+):
+    """
+    Convierte directamente una hoja ELEC/INST del manpower de Quellaveco
+    al formato interno que utiliza el importador PDP.
+
+    Conserva explícitamente:
+    - DESCRIPCION TRABAJO -> descripcion_trabajo
+    - DESCRIPCION OPERACIÓN -> operacion
+    - SSOMA -> ssoma
+
+    La columna descripcion se mantiene por compatibilidad con el resto del
+    aplicativo y toma OPERACION; si está vacía usa DESCRIPCION TRABAJO.
+    """
+
+    df = pd.read_excel(
+        io.BytesIO(archivo_bytes),
+        sheet_name=hoja_fuente,
+        header=5
+    )
+
+    if df.empty:
+        raise ValueError(
+            f"La hoja {hoja_fuente} no contiene información utilizable."
+        )
+
+    mapa = _mapa_columnas_manpower(df)
+
+    columnas_requeridas = [
+        "OT",
+        "EQUIPO",
+        "DESCRIPCION TRABAJO",
+        "DESCRIPCION OPERACION",
+        "EMPRESA",
+        "INICIO",
+        "FIN",
+        "CANT PERS",
+        "DUR (HR)",
+        "HH"
+    ]
+
+    faltantes = [
+        columna
+        for columna in columnas_requeridas
+        if columna not in mapa
+    ]
+
+    if faltantes:
+        raise ValueError(
+            "La hoja no tiene todas las columnas requeridas: "
+            + ", ".join(faltantes)
+        )
+
+    empresa_objetivo_norm = str(empresa_objetivo).strip().upper()
+
+    actividades = []
+    pendientes = []
+    hh_completadas = 0
+    filas_mainin = 0
+
+    for indice, row in df.iterrows():
+        fila_origen = int(indice) + 7
+
+        empresa = _texto_manpower(
+            _valor_columna_manpower(row, mapa, "EMPRESA")
+        )
+
+        if not empresa:
+            continue
+
+        if empresa.strip().upper() != empresa_objetivo_norm:
+            continue
+
+        filas_mainin += 1
+
+        ot = _ot_manpower(
+            _valor_columna_manpower(row, mapa, "OT")
+        )
+
+        equipo = _texto_manpower(
+            _valor_columna_manpower(row, mapa, "EQUIPO")
+        )
+
+        descripcion_trabajo = _texto_manpower(
+            _valor_columna_manpower(
+                row,
+                mapa,
+                "DESCRIPCION TRABAJO"
+            )
+        )
+
+        operacion = _texto_manpower(
+            _valor_columna_manpower(
+                row,
+                mapa,
+                "DESCRIPCION OPERACION"
+            )
+        )
+
+        ssoma = _texto_manpower(
+            _valor_columna_manpower(
+                row,
+                mapa,
+                "SSOMA"
+            )
+        )
+
+        descripcion_actividad = (
+            operacion
+            or descripcion_trabajo
+        )
+
+        inicio = _fecha_manpower(
+            _valor_columna_manpower(row, mapa, "INICIO")
+        )
+
+        fin = _fecha_manpower(
+            _valor_columna_manpower(row, mapa, "FIN")
+        )
+
+        motivo = []
+
+        if not ot:
+            motivo.append("Falta OT")
+
+        if not descripcion_actividad:
+            motivo.append("Falta DESCRIPCION TRABAJO / OPERACION")
+
+        if pd.isna(inicio) or pd.isna(fin):
+            motivo.append("Falta INICIO y/o FIN")
+
+        if motivo:
+            pendientes.append({
+                "fila_origen": fila_origen,
+                "ot": ot or "",
+                "equipo": equipo or "",
+                "descripcion_trabajo": descripcion_trabajo or "",
+                "operacion": operacion or "",
+                "ssoma": ssoma or "",
+                "motivo": "; ".join(motivo)
+            })
+            continue
+
+        supervisor = _texto_manpower(
+            _valor_columna_manpower(row, mapa, "SUPERVISOR")
+        )
+
+        especialidad = _texto_manpower(
+            _valor_columna_manpower(row, mapa, "ESPECIALIDAD")
+        )
+
+        grupo = _texto_manpower(
+            _valor_columna_manpower(row, mapa, "GRUPO")
+        )
+
+        area_origen = _texto_manpower(
+            _valor_columna_manpower(row, mapa, "AREA")
+        )
+
+        puesto_operaciones = _texto_manpower(
+            _valor_columna_manpower(
+                row,
+                mapa,
+                "PUESTO DE OPERACIONES"
+            )
+        )
+
+        partes_seccion = [
+            parte
+            for parte in [area_origen, puesto_operaciones]
+            if parte
+        ]
+        seccion = " | ".join(partes_seccion) or None
+
+        personal = _numero_manpower(
+            _valor_columna_manpower(row, mapa, "CANT PERS"),
+            entero=True
+        )
+
+        duracion_h = _numero_manpower(
+            _valor_columna_manpower(row, mapa, "DUR (HR)")
+        )
+
+        hh_plan = _numero_manpower(
+            _valor_columna_manpower(row, mapa, "HH")
+        )
+
+        tratamiento = None
+
+        if (
+            hh_plan is None
+            and personal is not None
+            and duracion_h is not None
+        ):
+            hh_plan = float(personal) * float(duracion_h)
+            hh_completadas += 1
+            tratamiento = "HH completada = Personal × Duración"
+
+        criticidad = _texto_manpower(
+            _valor_columna_manpower(row, mapa, "CRITICIDAD")
+        )
+
+        actividades.append({
+            "ot": ot,
+            "codigo_actividad": (
+                f"{prefijo_actividad}-{fila_origen:04d}"
+            ),
+            "descripcion": descripcion_actividad,
+            "descripcion_trabajo": descripcion_trabajo,
+            "operacion": operacion,
+            "ssoma": ssoma,
+            "supervisor": supervisor,
+            "especialidad": especialidad,
+            "grupo": grupo,
+            "peso": 1,
+            "inicio_plan": inicio.to_pydatetime(),
+            "fin_plan": fin.to_pydatetime(),
+            "seccion": seccion,
+            "personal": personal,
+            "duracion_h": duracion_h,
+            "hh_plan": hh_plan,
+            "fila_origen": fila_origen,
+            "criticidad_origen": criticidad,
+            "empresa_origen": empresa,
+            "tratamiento": tratamiento,
+            "_equipo": equipo,
+            "_ubicacion_tecnica": _texto_manpower(
+                _valor_columna_manpower(
+                    row,
+                    mapa,
+                    "DENOM.UBIC.TECNICA"
+                )
+            )
+        })
+
+    if not actividades:
+        raise ValueError(
+            f"No se encontraron actividades válidas para {empresa_objetivo}."
+        )
+
+    df_actividades_base = pd.DataFrame(actividades)
+
+    df_ots = (
+        df_actividades_base[
+            [
+                "ot",
+                "_equipo",
+                "descripcion_trabajo",
+                "_ubicacion_tecnica",
+                "empresa_origen"
+            ]
+        ]
+        .drop_duplicates(subset=["ot"], keep="first")
+        .rename(columns={
+            "_equipo": "equipo",
+            "descripcion_trabajo": "descripcion",
+            "_ubicacion_tecnica": "ubicacion_tecnica_origen"
+        })
+        .reset_index(drop=True)
+    )
+
+    columnas_actividades = [
+        "ot",
+        "codigo_actividad",
+        "descripcion",
+        "descripcion_trabajo",
+        "operacion",
+        "ssoma",
+        "supervisor",
+        "especialidad",
+        "grupo",
+        "peso",
+        "inicio_plan",
+        "fin_plan",
+        "seccion",
+        "personal",
+        "duracion_h",
+        "hh_plan",
+        "fila_origen",
+        "criticidad_origen",
+        "empresa_origen",
+        "tratamiento"
+    ]
+
+    df_actividades = (
+        df_actividades_base[columnas_actividades]
+        .reset_index(drop=True)
+    )
+
+    inicio_min = df_actividades["inicio_plan"].min()
+    fin_max = df_actividades["fin_plan"].max()
+
+    resumen = {
+        "area": nombre_area,
+        "empresa": empresa_objetivo,
+        "filas_mainin": filas_mainin,
+        "ots": len(df_ots),
+        "actividades": len(df_actividades),
+        "excluidas": len(pendientes),
+        "hh_completadas": hh_completadas,
+        "inicio": inicio_min,
+        "fin": fin_max
+    }
+
+    return {
+        "ots": df_ots,
+        "actividades": df_actividades,
+        "pendientes": pd.DataFrame(pendientes),
+        "resumen": resumen
+    }
+
+def convertir_manpower_quellaveco(archivo_bytes):
+    """Convierte ELEC e INST en una sola carga del manpower fuente."""
+
+    libro = pd.ExcelFile(io.BytesIO(archivo_bytes))
+    hojas = set(libro.sheet_names)
+
+    configuraciones = [
+        {
+            "clave": "ELECTRICIDAD",
+            "hoja": "ELEC",
+            "empresa": "MAININ ELE",
+            "prefijo": "ELEC",
+            "nombre": "Electricidad"
+        },
+        {
+            "clave": "INSTRUMENTACION",
+            "hoja": "INST",
+            "empresa": "MAININ INS",
+            "prefijo": "INST",
+            "nombre": "Instrumentación"
+        }
+    ]
+
+    resultados = {}
+
+    for config in configuraciones:
+        if config["hoja"] not in hojas:
+            resultados[config["clave"]] = {
+                "error": (
+                    f"No se encontró la hoja {config['hoja']} en el archivo."
+                )
+            }
+            continue
+
+        try:
+            resultados[config["clave"]] = convertir_hoja_manpower(
+                archivo_bytes=archivo_bytes,
+                hoja_fuente=config["hoja"],
+                empresa_objetivo=config["empresa"],
+                prefijo_actividad=config["prefijo"],
+                nombre_area=config["nombre"]
+            )
+        except Exception as exc:
+            resultados[config["clave"]] = {
+                "error": str(exc)
+            }
+
+    return resultados
 
 
 # =====================================================
@@ -3471,6 +3932,7 @@ if rol == "admin":
                     .table("actividades")
                     .select(
                         "id,ot_id,codigo_actividad,descripcion,"
+                        "descripcion_trabajo,operacion,ssoma,"
                         "supervisor,especialidad,grupo,peso,"
                         "inicio_plan,fin_plan,seccion,personal,"
                         "duracion_h,hh_plan,critica,activo"
@@ -6070,7 +6532,7 @@ if rol == "admin":
                         )
 
                     busqueda_operativa_admin = st.text_input(
-                        "Buscar por OT, equipo, actividad o descripción",
+                        "Buscar por OT, equipo, actividad, trabajo, operación o SSOMA",
                         placeholder=(
                             "Ejemplo: 7169908, SAG, ACT-009..."
                         ),
@@ -6193,7 +6655,10 @@ if rol == "admin":
                             "ot",
                             "equipo",
                             "codigo_actividad",
-                            "descripcion"
+                            "descripcion",
+                            "descripcion_trabajo",
+                            "operacion",
+                            "ssoma"
                         ]:
 
                             if (
@@ -6239,6 +6704,9 @@ if rol == "admin":
                         "ot",
                         "equipo",
                         "codigo_actividad",
+                        "descripcion_trabajo",
+                        "operacion",
+                        "ssoma",
                         "descripcion",
                         "ESTADO",
                         "PLAN ACTUAL (%)",
@@ -6295,6 +6763,12 @@ if rol == "admin":
                                 "equipo": "EQUIPO",
                                 "codigo_actividad":
                                     "ACTIVIDAD",
+                                "descripcion_trabajo":
+                                    "DESCRIPCIÓN TRABAJO",
+                                "operacion":
+                                    "OPERACIÓN",
+                                "ssoma":
+                                    "SSOMA",
                                 "descripcion":
                                     "DESCRIPCIÓN",
                                 "avance_real":
@@ -6517,11 +6991,12 @@ if rol == "admin":
 
     elif pagina_admin == "Importar planificación":
 
-        st.subheader("Importar planificación por área")
+        st.subheader("Importar planificación")
 
-        st.warning(
-            "La planificación que se cargue corresponderá "
-            "únicamente al área seleccionada."
+        st.info(
+            "Puede subir directamente el MANPOWER ORIGINAL de Quellaveco "
+            "o un archivo que ya tenga las hojas OTs y Actividades. "
+            "El aplicativo detectará el formato y realizará el tratamiento automáticamente."
         )
 
         resultado_areas = (
@@ -6549,49 +7024,195 @@ if rol == "admin":
         else:
 
             area_texto = st.selectbox(
-                "Seleccione el área",
+                "Seleccione el área que desea reemplazar",
                 list(mapa_areas.keys())
             )
 
             area_seleccionada = mapa_areas[area_texto]
+            codigo_area_import = str(
+                area_seleccionada.get("codigo") or ""
+            ).strip().upper()
 
-            st.info(
-                f"Área seleccionada: "
-                f"{area_seleccionada['nombre']}"
+            st.warning(
+                f"La carga reemplazará únicamente la planificación de "
+                f"{area_seleccionada['nombre']}."
             )
 
             archivo = st.file_uploader(
-                "Seleccione el Excel de planificación",
-                type=["xlsx"]
+                "Suba el Excel original de manpower o el formato PDP",
+                type=["xlsx"],
+                key=f"importacion_plan_{codigo_area_import}"
             )
 
             if archivo is not None:
 
                 try:
-
-                    df_ots = pd.read_excel(
-                        archivo,
-                        sheet_name="OTs"
+                    archivo_bytes = archivo.getvalue()
+                    libro = pd.ExcelFile(
+                        io.BytesIO(archivo_bytes)
                     )
+                    hojas_archivo = set(libro.sheet_names)
 
-                    df_actividades = pd.read_excel(
-                        archivo,
-                        sheet_name="Actividades"
-                    )
+                    pendientes_import = pd.DataFrame()
+                    resumen_tratamiento = None
+
+                    # ==========================================
+                    # DETECCIÓN AUTOMÁTICA DE FORMATO
+                    # ==========================================
+                    if {"OTs", "Actividades"}.issubset(hojas_archivo):
+                        formato_detectado = "FORMATO PDP"
+
+                        df_ots = pd.read_excel(
+                            io.BytesIO(archivo_bytes),
+                            sheet_name="OTs"
+                        )
+
+                        df_actividades = pd.read_excel(
+                            io.BytesIO(archivo_bytes),
+                            sheet_name="Actividades"
+                        )
+
+                    else:
+                        configuracion_manpower = {
+                            "ELECTRICIDAD": {
+                                "hoja": "ELEC",
+                                "empresa": "MAININ ELE",
+                                "prefijo": "ELEC",
+                                "nombre": "Electricidad"
+                            },
+                            "INSTRUMENTACION": {
+                                "hoja": "INST",
+                                "empresa": "MAININ INS",
+                                "prefijo": "INST",
+                                "nombre": "Instrumentación"
+                            }
+                        }
+
+                        config = configuracion_manpower.get(
+                            codigo_area_import
+                        )
+
+                        if not config:
+                            raise ValueError(
+                                "El área seleccionada no tiene una regla de conversión configurada."
+                            )
+
+                        if config["hoja"] not in hojas_archivo:
+                            raise ValueError(
+                                f"No se encontró la hoja {config['hoja']} para "
+                                f"{area_seleccionada['nombre']}."
+                            )
+
+                        formato_detectado = "MANPOWER ORIGINAL"
+
+                        conversion = convertir_hoja_manpower(
+                            archivo_bytes=archivo_bytes,
+                            hoja_fuente=config["hoja"],
+                            empresa_objetivo=config["empresa"],
+                            prefijo_actividad=config["prefijo"],
+                            nombre_area=config["nombre"]
+                        )
+
+                        df_ots = conversion["ots"]
+                        df_actividades = conversion["actividades"]
+                        pendientes_import = conversion["pendientes"]
+                        resumen_tratamiento = conversion["resumen"]
 
                     st.success(
-                        f"Archivo leído correctamente: "
-                        f"{len(df_ots)} OTs y "
+                        f"Formato detectado: {formato_detectado}. "
+                        f"Se prepararon {len(df_ots)} OTs y "
                         f"{len(df_actividades)} actividades."
                     )
 
-                    st.write("Vista previa de OTs")
+                    if resumen_tratamiento:
+                        r1, r2, r3, r4 = st.columns(4)
 
+                        with r1:
+                            st.metric(
+                                "Filas MAININ",
+                                resumen_tratamiento["filas_mainin"]
+                            )
+
+                        with r2:
+                            st.metric(
+                                "OTs",
+                                resumen_tratamiento["ots"]
+                            )
+
+                        with r3:
+                            st.metric(
+                                "Actividades",
+                                resumen_tratamiento["actividades"]
+                            )
+
+                        with r4:
+                            st.metric(
+                                "Excluidas",
+                                resumen_tratamiento["excluidas"]
+                            )
+
+                        st.caption(
+                            f"HH completadas automáticamente: "
+                            f"{resumen_tratamiento['hh_completadas']} · "
+                            f"Inicio: {resumen_tratamiento['inicio']} · "
+                            f"Fin: {resumen_tratamiento['fin']}"
+                        )
+
+                    st.markdown("#### Vista previa de OTs")
                     st.dataframe(
                         df_ots.head(10),
                         use_container_width=True,
                         hide_index=True
                     )
+
+                    st.markdown("#### Vista previa de actividades")
+
+                    columnas_preview = [
+                        "ot",
+                        "codigo_actividad",
+                        "descripcion_trabajo",
+                        "operacion",
+                        "ssoma",
+                        "supervisor",
+                        "especialidad",
+                        "grupo",
+                        "inicio_plan",
+                        "fin_plan",
+                        "personal",
+                        "duracion_h",
+                        "hh_plan"
+                    ]
+
+                    columnas_preview = [
+                        columna
+                        for columna in columnas_preview
+                        if columna in df_actividades.columns
+                    ]
+
+                    if columnas_preview:
+                        st.dataframe(
+                            df_actividades[columnas_preview].head(20),
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                    else:
+                        st.dataframe(
+                            df_actividades.head(20),
+                            use_container_width=True,
+                            hide_index=True
+                        )
+
+                    if not pendientes_import.empty:
+                        st.warning(
+                            f"Se excluyeron {len(pendientes_import)} fila(s) "
+                            "por información obligatoria incompleta."
+                        )
+                        with st.expander("Ver filas excluidas"):
+                            st.dataframe(
+                                pendientes_import,
+                                use_container_width=True,
+                                hide_index=True
+                            )
 
                     st.divider()
 
@@ -6617,7 +7238,6 @@ if rol == "admin":
                     ):
 
                         try:
-
                             area_id = area_seleccionada["id"]
 
                             progreso = st.progress(
@@ -6626,9 +7246,8 @@ if rol == "admin":
                             )
 
                             # ==========================================
-                            # VALIDAR COLUMNAS
+                            # VALIDAR COLUMNAS BASE
                             # ==========================================
-
                             columnas_ots = {
                                 "ot",
                                 "equipo",
@@ -6680,11 +7299,9 @@ if rol == "admin":
                             # ==========================================
                             # PREPARAR OTs
                             # ==========================================
-
                             ots_limpias = []
 
                             for _, row in df_ots.iterrows():
-
                                 ot = limpiar_texto(row.get("ot"))
 
                                 if not ot:
@@ -6707,10 +7324,6 @@ if rol == "admin":
                                     "No existen OTs válidas para importar."
                                 )
 
-                            # ==========================================
-                            # BUSCAR INFORMACIÓN EXISTENTE DEL ÁREA
-                            # ==========================================
-
                             progreso.progress(
                                 25,
                                 text="Revisando planificación anterior..."
@@ -6730,11 +7343,9 @@ if rol == "admin":
                             ]
 
                             # ==========================================
-                            # ELIMINAR AVANCES Y ACTIVIDADES ANTERIORES
+                            # ELIMINAR PLANIFICACIÓN ANTERIOR DEL ÁREA
                             # ==========================================
-
                             if ot_ids:
-
                                 actividades_actuales = (
                                     supabase_admin
                                     .table("actividades")
@@ -6749,7 +7360,6 @@ if rol == "admin":
                                 ]
 
                                 if actividad_ids:
-
                                     supabase_admin.table(
                                         "avances_actividad"
                                     ).delete().in_(
@@ -6777,12 +7387,11 @@ if rol == "admin":
                                 ).execute()
 
                             # ==========================================
-                            # INSERTAR NUEVAS OTs
+                            # INSERTAR OTs
                             # ==========================================
-
                             progreso.progress(
                                 55,
-                                text="Cargando nuevas OTs..."
+                                text="Cargando OTs..."
                             )
 
                             (
@@ -6791,10 +7400,6 @@ if rol == "admin":
                                 .insert(ots_limpias)
                                 .execute()
                             )
-
-                            # ==========================================
-                            # RECUPERAR IDs DE LAS NUEVAS OTs
-                            # ==========================================
 
                             ots_nuevas = (
                                 supabase_admin
@@ -6815,14 +7420,12 @@ if rol == "admin":
                             )
 
                             # ==========================================
-                            # PREPARAR ACTIVIDADES
+                            # PREPARAR ACTIVIDADES + NUEVOS CAMPOS
                             # ==========================================
-
                             actividades_limpias = []
                             ots_no_encontradas = []
 
                             for _, row in df_actividades.iterrows():
-
                                 ot = limpiar_texto(
                                     row.get("ot")
                                 )
@@ -6846,6 +7449,15 @@ if rol == "admin":
                                     "ot_id": mapa_ots[ot],
                                     "codigo_actividad": codigo,
                                     "descripcion": descripcion,
+                                    "descripcion_trabajo": limpiar_texto(
+                                        row.get("descripcion_trabajo")
+                                    ),
+                                    "operacion": limpiar_texto(
+                                        row.get("operacion")
+                                    ),
+                                    "ssoma": limpiar_texto(
+                                        row.get("ssoma")
+                                    ),
                                     "supervisor": limpiar_texto(
                                         row.get("supervisor")
                                     ),
@@ -6895,10 +7507,6 @@ if rol == "admin":
                                     "No existen actividades válidas."
                                 )
 
-                            # ==========================================
-                            # INSERTAR ACTIVIDADES
-                            # ==========================================
-
                             progreso.progress(
                                 80,
                                 text="Cargando actividades..."
@@ -6906,14 +7514,13 @@ if rol == "admin":
 
                             batch_size = 200
 
-                            for inicio in range(
+                            for inicio_lote in range(
                                 0,
                                 len(actividades_limpias),
                                 batch_size
                             ):
-
                                 lote = actividades_limpias[
-                                    inicio:inicio + batch_size
+                                    inicio_lote:inicio_lote + batch_size
                                 ]
 
                                 (
@@ -6933,30 +7540,22 @@ if rol == "admin":
                                 f"{area_seleccionada['nombre']} "
                                 f"actualizada correctamente: "
                                 f"{len(ots_limpias)} OTs y "
-                                f"{len(actividades_limpias)} actividades."
+                                f"{len(actividades_limpias)} actividades. "
+                                "Se conservaron Descripción de trabajo, "
+                                "Operación y SSOMA."
                             )
 
                             st.balloons()
 
                         except Exception as import_error:
-
                             st.error(
                                 "No fue posible importar la planificación: "
                                 f"{import_error}"
                             )
 
-                    st.write("Vista previa de actividades")
-
-                    st.dataframe(
-                        df_actividades.head(10),
-                        use_container_width=True,
-                        hide_index=True
-                    )
-
                 except Exception as exc:
-
                     st.error(
-                        f"No fue posible leer el Excel: {exc}"
+                        f"No fue posible procesar el Excel: {exc}"
                     )
 
 
@@ -7300,6 +7899,7 @@ if rol == "admin":
                     .table("actividades")
                     .select(
                         "id,ot_id,codigo_actividad,descripcion,"
+                        "descripcion_trabajo,operacion,ssoma,"
                         "supervisor,especialidad,grupo,peso,"
                         "inicio_plan,fin_plan,seccion,personal,"
                         "duracion_h,hh_plan,critica,activo"
@@ -7506,6 +8106,7 @@ else:
                 .table("actividades")
                 .select(
                     "id,ot_id,codigo_actividad,descripcion,"
+                    "descripcion_trabajo,operacion,ssoma,"
                     "supervisor,especialidad,grupo,peso,"
                     "inicio_plan,fin_plan,seccion,personal,"
                     "duracion_h,hh_plan,critica,activo"
@@ -8534,8 +9135,9 @@ else:
                 supabase
                 .table("actividades")
                 .select(
-                    "id,codigo_actividad,descripcion,supervisor,"
-                    "especialidad,grupo,peso,inicio_plan,fin_plan,"
+                    "id,codigo_actividad,descripcion,descripcion_trabajo,"
+                    "operacion,ssoma,supervisor,especialidad,grupo,peso,"
+                    "inicio_plan,fin_plan,"
                     "seccion,personal,duracion_h,hh_plan,critica,activo"
                 )
                 .eq(
@@ -8658,6 +9260,28 @@ else:
                 st.text_area(
                     "Descripción de actividad",
                     value=str(actividad.get("descripcion") or ""),
+                    disabled=True
+                )
+
+                dt1, dt2 = st.columns(2)
+
+                with dt1:
+                    st.text_area(
+                        "Descripción de trabajo",
+                        value=str(actividad.get("descripcion_trabajo") or ""),
+                        disabled=True
+                    )
+
+                with dt2:
+                    st.text_area(
+                        "Operación",
+                        value=str(actividad.get("operacion") or ""),
+                        disabled=True
+                    )
+
+                st.text_area(
+                    "SSOMA",
+                    value=str(actividad.get("ssoma") or ""),
                     disabled=True
                 )
 
@@ -9049,6 +9673,7 @@ else:
                 .table("actividades")
                 .select(
                     "id,ot_id,codigo_actividad,descripcion,"
+                    "descripcion_trabajo,operacion,ssoma,"
                     "supervisor,especialidad,grupo,peso,"
                     "inicio_plan,fin_plan,seccion,personal,"
                     "duracion_h,hh_plan,critica,activo"
@@ -9303,6 +9928,9 @@ else:
 
                 columnas_detalle_ot = [
                     "codigo_actividad",
+                    "descripcion_trabajo",
+                    "operacion",
+                    "ssoma",
                     "descripcion",
                     "supervisor",
                     "especialidad",
@@ -9329,6 +9957,12 @@ else:
                     columns={
                         "codigo_actividad":
                             "ACTIVIDAD",
+                        "descripcion_trabajo":
+                            "DESCRIPCIÓN TRABAJO",
+                        "operacion":
+                            "OPERACIÓN",
+                        "ssoma":
+                            "SSOMA",
                         "descripcion":
                             "DESCRIPCIÓN",
                         "supervisor":
@@ -9810,6 +10444,7 @@ else:
                 .table("actividades")
                 .select(
                     "id,ot_id,codigo_actividad,descripcion,"
+                    "descripcion_trabajo,operacion,ssoma,"
                     "supervisor,especialidad,grupo,peso,"
                     "inicio_plan,fin_plan,seccion,personal,"
                     "duracion_h,hh_plan,critica,activo"
@@ -10356,6 +10991,7 @@ else:
                 .table("actividades")
                 .select(
                     "id,ot_id,codigo_actividad,descripcion,"
+                    "descripcion_trabajo,operacion,ssoma,"
                     "supervisor,especialidad,grupo,peso,"
                     "inicio_plan,fin_plan,seccion,personal,"
                     "duracion_h,hh_plan,critica,activo"
