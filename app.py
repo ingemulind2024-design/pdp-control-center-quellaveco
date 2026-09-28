@@ -573,6 +573,60 @@ def aplicar_estilo_profesional():
 
         #MainMenu { visibility:hidden; }
         footer { visibility:hidden; }
+        header[data-testid="stHeader"] { background: transparent; }
+        [data-testid="stToolbar"] { display:none !important; }
+        [data-testid="stDecoration"] { display:none !important; }
+        .stAppDeployButton { display:none !important; }
+
+        /* KPIs compactos para vistas operativas */
+        .planner-kpi-grid {
+            display:grid;
+            grid-template-columns:repeat(3,minmax(0,1fr));
+            gap:10px;
+            margin:.2rem 0 .7rem;
+        }
+        .planner-kpi-card {
+            position:relative;
+            overflow:hidden;
+            background:linear-gradient(180deg,#FFFFFF 0%,#FBFCFE 100%);
+            border:1px solid #DCE5EE;
+            border-radius:16px;
+            padding:12px 13px 11px;
+            box-shadow:0 8px 20px rgba(11,31,51,.05);
+        }
+        .planner-kpi-card:before {
+            content:"";
+            position:absolute;
+            inset:0 auto 0 0;
+            width:3px;
+            background:#155EEF;
+        }
+        .planner-kpi-card.good:before { background:#079455; }
+        .planner-kpi-card.warn:before { background:#F79009; }
+        .planner-kpi-card.risk:before { background:#D92D20; }
+        .planner-kpi-card.neutral:before { background:#5B7895; }
+        .planner-kpi-label {
+            color:#667085;
+            font-size:9px;
+            font-weight:800;
+            text-transform:uppercase;
+            letter-spacing:.08em;
+            margin-bottom:4px;
+        }
+        .planner-kpi-value {
+            color:var(--ink);
+            font-size:26px;
+            line-height:1;
+            font-weight:880;
+            letter-spacing:-.035em;
+        }
+        .planner-kpi-foot {
+            color:#7A8795;
+            font-size:9.5px;
+            margin-top:5px;
+            min-height:12px;
+            line-height:1.2;
+        }
 
         @media (max-width: 1100px) {
             .exec-kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
@@ -838,6 +892,8 @@ def aplicar_estilo_profesional():
             .mainin-chip { font-size:7.7px; }
             .exec-kpi-value { font-size:20px; }
             .exec-kpi-foot { display:none; }
+            .planner-kpi-grid { grid-template-columns:1fr 1fr; }
+            .planner-kpi-foot { display:none; }
             .login-brand-title { font-size:22px; }
         }
 
@@ -1106,10 +1162,13 @@ def aplicar_estilo_profesional():
             display:flex;
             align-items:center;
             justify-content:space-between;
-            gap:16px;
-            margin:.10rem 0 .72rem;
-            padding:2px 2px 8px;
-            border-bottom:1px solid #E4EAF0;
+            gap:14px;
+            margin:.08rem 0 .78rem;
+            padding:10px 12px;
+            background:linear-gradient(180deg,#FFFFFF 0%, #F9FBFD 100%);
+            border:1px solid #E3EAF2;
+            border-radius:16px;
+            box-shadow:0 8px 22px rgba(15,36,56,.045);
         }
         .page-intro-main {
             display:flex;
@@ -5154,6 +5213,56 @@ def mostrar_logo_mainin_sidebar():
 
 
 # =====================================================
+def mostrar_kpis_operativos(kpis, total_ots):
+    total_actividades = int(kpis.get("actividades", 0) or 0)
+    avance_general = float(kpis.get("avance_general", 0) or 0)
+    culminadas = int(kpis.get("culminadas", 0) or 0)
+    en_ejecucion = int(kpis.get("parciales", 0) or 0)
+    no_iniciadas = int(kpis.get("no_iniciadas", 0) or 0)
+    spi = float(kpis.get("spi", 0) or 0)
+    hh_plan = float(kpis.get("hh_plan", 0) or 0)
+    hh_ganadas = float(kpis.get("hh_ganadas", 0) or 0)
+
+    def clase_por_valor(nombre, valor=None):
+        if nombre == "avance_general":
+            if valor >= 90:
+                return "good"
+            if valor >= 70:
+                return "warn"
+            return "risk"
+        if nombre == "spi":
+            if valor >= 1:
+                return "good"
+            if valor >= 0.9:
+                return "warn"
+            return "risk"
+        if nombre in {"culminadas", "hh_ganadas"}:
+            return "good"
+        if nombre in {"no_iniciadas"}:
+            return "risk"
+        return "neutral"
+
+    tarjetas = [
+        ("OTs", f"{total_ots}", "Órdenes activas del área", "neutral"),
+        ("Actividades", f"{total_actividades}", "Frente total de trabajo", "neutral"),
+        ("Avance", f"{avance_general:.1f}%", "Progreso acumulado real", clase_por_valor("avance_general", avance_general)),
+        ("Culminadas", f"{culminadas}", "Actividades al 100%", "good"),
+        ("En ejecución", f"{en_ejecucion}", "Con avance parcial", "warn"),
+        ("No iniciadas", f"{no_iniciadas}", "Pendientes de arranque", "risk"),
+        ("SPI", f"{spi:.2f}", "Desempeño plan vs real", clase_por_valor("spi", spi)),
+        ("HH plan", f"{hh_plan:.0f}", "Horas hombre planificadas", "neutral"),
+        ("HH ganadas", f"{hh_ganadas:.0f}", "Horas hombre ejecutadas", "good"),
+    ]
+
+    html = ['<div class="planner-kpi-grid">']
+    for titulo, valor, pie, clase in tarjetas:
+        html.append(
+            f'<div class="planner-kpi-card {clase}"><div class="planner-kpi-label">{titulo}</div><div class="planner-kpi-value">{valor}</div><div class="planner-kpi-foot">{pie}</div></div>'
+        )
+    html.append('</div>')
+    st.markdown("".join(html), unsafe_allow_html=True)
+
+
 # CONTROL DE ROLES Y CONTRASEÑAS
 # =====================================================
 
@@ -5800,13 +5909,8 @@ if rol == "admin":
                             go.Scatter(
                                 x=datos_curva_admin["fecha"],
                                 y=datos_curva_admin["Avance"],
-                                mode="lines+markers+text",
+                                mode="lines+markers",
                                 name=nombre_curva,
-                                text=etiquetas_admin,
-                                textposition=posicion_texto,
-                                textfont=dict(
-                                    size=10
-                                ),
                                 line=dict(
                                     width=4,
                                     shape="spline",
@@ -5832,7 +5936,7 @@ if rol == "admin":
                         )
 
                     figura_curva_admin.update_layout(
-                        height=500,
+                        height=420,
                         hovermode="x unified",
                         paper_bgcolor="#FFFFFF",
                         plot_bgcolor="#FFFFFF",
@@ -9955,89 +10059,13 @@ else:
                 kpis.get("hh_ganadas", 0)
             )
 
-            # ========================================================= 
+            # =========================================================
             # INDICADORES PRINCIPALES DEL DASHBOARD
-            # =========================================================        
+            # =========================================================
             total_ots = len(ots_area)
-            total_actividades = kpis["actividades"]
+            mostrar_kpis_operativos(kpis, total_ots)
 
-            avance_general = kpis["avance_general"]
-            culminadas = kpis["culminadas"]
-            en_ejecucion = kpis["parciales"]
-            no_iniciadas = kpis["no_iniciadas"]
-
-            spi = kpis["spi"]
-            hh_plan = kpis["hh_plan"]
-            hh_ganadas = kpis["hh_ganadas"] 
-
-            # =========================================================
-            # FILA 1
-            # =========================================================
-
-            c1, c2, c3, c4, c5, c6 = st.columns(6)
-
-            with c1:
-                st.metric(
-                    "OTs",
-                    total_ots
-                )
-
-            with c2:
-                st.metric(
-                    "Actividades",
-                    total_actividades
-                )
-
-            with c3:
-                st.metric(
-                    "Avance general",
-                    f"{avance_general:.1f}%"
-                )    
-
-            with c4:
-                st.metric(
-                    "Culminadas",
-                    culminadas
-                )      
-
-            with c5:
-                st.metric(
-                    "En ejecución",
-                    en_ejecucion
-                )  
-
-            with c6:
-                st.metric(
-                    "No iniciadas",
-                    no_iniciadas
-                )    
-
-            # =========================================================
-            # FILA 2
-            # =========================================================   
-
-            c7, c8, c9 = st.columns(3)
-
-            with c7:
-                st.metric(
-                    "SPI",
-                    f"{spi:.2f}",
-                    help="SPI = Avance Real / Avance Plan"
-                )
-
-            with c8:
-                st.metric(
-                    "HH planificadas",
-                    f"{hh_plan:.0f}"
-                ) 
-
-            with c9:
-                st.metric(
-                    "HH ganadas",
-                    f"{hh_ganadas:.0f}"
-                )
-
-            st.divider()    
+            st.divider()
 
             # =============================================
             # 7. SEMÁFORO DEL PROYECTO
@@ -10110,23 +10138,17 @@ else:
                     go.Scatter(
                         x=curva_s["fecha"],
                         y=curva_s["PLAN"],
-                        mode="lines+markers+text",
+                        mode="lines+markers",
                         name="PLAN",
-                        text=texto_plan,
-                        textposition="top center",
-                        textfont=dict(
-                            size=11
-                        ),
                         line=dict(
                             width=4,
                             shape="spline",
                             smoothing=1.05
                         ),
                         marker=dict(
-                            size=8,
-                            line=dict(
-                                width=1
-                            )
+                            size=7,
+                            color="#155EEF",
+                            line=dict(width=1, color="#FFFFFF")
                         ),
                         hovertemplate=(
                             "<b>PLAN</b><br>"
@@ -10142,23 +10164,17 @@ else:
                     go.Scatter(
                         x=curva_s["fecha"],
                         y=curva_s["REAL"],
-                        mode="lines+markers+text",
+                        mode="lines+markers",
                         name="REAL",
-                        text=texto_real,
-                        textposition="bottom center",
-                        textfont=dict(
-                            size=11
-                        ),
                         line=dict(
                             width=4,
                             shape="spline",
                             smoothing=1.05
                         ),
                         marker=dict(
-                            size=8,
-                            line=dict(
-                                width=1
-                            )
+                            size=7,
+                            color="#D92D20",
+                            line=dict(width=1, color="#FFFFFF")
                         ),
                         connectgaps=False,
                         hovertemplate=(
@@ -10173,34 +10189,42 @@ else:
                 fig_s.update_layout(
                     xaxis_title="Fecha / Hora",
                     yaxis_title="Avance acumulado (%)",
+                    paper_bgcolor="#FFFFFF",
+                    plot_bgcolor="#FFFFFF",
+                    font=dict(color="#344054", size=12),
                     yaxis=dict(
                         range=[0, 108],
                         ticksuffix="%",
                         dtick=20,
                         showgrid=True,
                         gridwidth=1,
+                        gridcolor="#EEF2F6",
+                        linecolor="#D0D5DD",
                         zeroline=False
                     ),
                     xaxis=dict(
                         showgrid=True,
                         gridwidth=1,
+                        gridcolor="#EEF2F6",
+                        linecolor="#D0D5DD",
                         tickformat="%d/%m\n%H:%M"
                     ),
                     hovermode="x unified",
                     legend=dict(
                         orientation="h",
                         yanchor="bottom",
-                        y=1.04,
+                        y=1.03,
                         xanchor="center",
                         x=0.5
                     ),
                     margin=dict(
-                        l=50,
-                        r=35,
-                        t=65,
-                        b=55
+                        l=38,
+                        r=18,
+                        t=46,
+                        b=42
                     ),
-                    height=560
+                    height=420
+                
                 )
 
                 st.plotly_chart(
@@ -10208,7 +10232,10 @@ else:
                     use_container_width=True,
                     config={
                         "displaylogo": False,
-                        "responsive": True
+                        "responsive": True,
+                        "modeBarButtonsToRemove": [
+                            "lasso2d", "select2d", "autoScale2d", "toggleSpikelines"
+                        ]
                     }
                 )
 
@@ -10263,27 +10290,27 @@ else:
                     y="OT / Equipo",
                     orientation="h",
                     text="Avance",
-                    hover_data=[
-                        "Actividades",
-                        "Pendientes"
-                    ]
+                    hover_data=["Actividades", "Pendientes"],
+                    color_discrete_sequence=["#155EEF"]
                 )
 
                 fig_ot.update_traces(
                     texttemplate="%{text:.1f}%",
-                    textposition="outside"
+                    textposition="outside",
+                    marker_line_width=0,
+                    hovertemplate="<b>%{y}</b><br>Avance: %{x:.1f}%<br>Actividades: %{customdata[0]}<br>Pendientes: %{customdata[1]}<extra></extra>"
                 )
 
                 fig_ot.update_layout(
+                    paper_bgcolor="#FFFFFF",
+                    plot_bgcolor="#FFFFFF",
+                    font=dict(color="#344054", size=12),
                     xaxis_title="Avance (%)",
                     yaxis_title="",
-                    xaxis=dict(
-                        range=[0, 105]
-                    ),
-                    height=max(
-                        420,
-                        len(df_ot) * 32
-                    )
+                    xaxis=dict(range=[0, 105], ticksuffix="%", gridcolor="#EEF2F6", linecolor="#D0D5DD"),
+                    yaxis=dict(gridcolor="rgba(0,0,0,0)", linecolor="#D0D5DD"),
+                    margin=dict(l=20, r=20, t=18, b=26),
+                    height=max(300, len(df_ot) * 30)
                 )
 
                 st.plotly_chart(
@@ -10314,17 +10341,32 @@ else:
                 estado_resumen,
                 x="Estado",
                 y="Cantidad",
-                text="Cantidad"
+                text="Cantidad",
+                color="Estado",
+                color_discrete_map={
+                    "Culminadas": "#079455",
+                    "En ejecución": "#F79009",
+                    "No iniciadas": "#D92D20"
+                }
             )
 
             fig_estado.update_traces(
-                textposition="outside"
+                textposition="outside",
+                marker_line_width=0,
+                hovertemplate="<b>%{x}</b><br>Cantidad: %{y}<extra></extra>"
             )
 
             fig_estado.update_layout(
+                paper_bgcolor="#FFFFFF",
+                plot_bgcolor="#FFFFFF",
+                font=dict(color="#344054", size=12),
                 yaxis_title="N.º de actividades",
                 xaxis_title="",
-                height=380
+                showlegend=False,
+                yaxis=dict(gridcolor="#EEF2F6", linecolor="#D0D5DD"),
+                xaxis=dict(linecolor="#D0D5DD"),
+                margin=dict(l=20, r=20, t=12, b=20),
+                height=320
             )
 
             st.plotly_chart(
@@ -10393,21 +10435,27 @@ else:
                         x="Avance",
                         y="especialidad",
                         orientation="h",
-                        text="Avance"
+                        text="Avance",
+                        color_discrete_sequence=["#0EA5E9"]
                     )
 
                     fig_esp.update_traces(
                         texttemplate="%{text:.1f}%",
-                        textposition="outside"
+                        textposition="outside",
+                        marker_line_width=0,
+                        hovertemplate="<b>%{y}</b><br>Avance: %{x:.1f}%<extra></extra>"
                     )
 
                     fig_esp.update_layout(
+                        paper_bgcolor="#FFFFFF",
+                        plot_bgcolor="#FFFFFF",
+                        font=dict(color="#344054", size=12),
                         xaxis_title="Avance (%)",
                         yaxis_title="",
-                        xaxis=dict(
-                            range=[0, 105]
-                        ),
-                        height=420
+                        xaxis=dict(range=[0, 105], ticksuffix="%", gridcolor="#EEF2F6", linecolor="#D0D5DD"),
+                        yaxis=dict(gridcolor="rgba(0,0,0,0)", linecolor="#D0D5DD"),
+                        margin=dict(l=18, r=18, t=12, b=24),
+                        height=360
                     )
 
                     st.plotly_chart(
@@ -10472,21 +10520,27 @@ else:
                         x="Avance",
                         y="supervisor",
                         orientation="h",
-                        text="Avance"
+                        text="Avance",
+                        color_discrete_sequence=["#155EEF"]
                     )
 
                     fig_sup.update_traces(
                         texttemplate="%{text:.1f}%",
-                        textposition="outside"
+                        textposition="outside",
+                        marker_line_width=0,
+                        hovertemplate="<b>%{y}</b><br>Avance: %{x:.1f}%<extra></extra>"
                     )
 
                     fig_sup.update_layout(
+                        paper_bgcolor="#FFFFFF",
+                        plot_bgcolor="#FFFFFF",
+                        font=dict(color="#344054", size=12),
                         xaxis_title="Avance (%)",
                         yaxis_title="",
-                        xaxis=dict(
-                            range=[0, 105]
-                        ),
-                        height=420
+                        xaxis=dict(range=[0, 105], ticksuffix="%", gridcolor="#EEF2F6", linecolor="#D0D5DD"),
+                        yaxis=dict(gridcolor="rgba(0,0,0,0)", linecolor="#D0D5DD"),
+                        margin=dict(l=18, r=18, t=12, b=24),
+                        height=360
                     )
 
                     st.plotly_chart(
