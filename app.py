@@ -1,5 +1,6 @@
 import io
 import base64
+import time
 import hashlib
 import hmac
 from pathlib import Path
@@ -46,13 +47,13 @@ st.set_page_config(
 
 
 # =====================================================
-# SESIÓN PERSISTENTE EN EL NAVEGADOR
+# SESIÓN PERSISTENTE EN NAVEGADOR
 # =====================================================
 COOKIE_SESION = "mainin_quellaveco_session"
 DIAS_SESION_PERSISTENTE = 7
+COOKIE_MAX_AGE = DIAS_SESION_PERSISTENTE * 24 * 60 * 60
 
-# CookieManager solo guarda un token firmado.
-# Nunca se almacena la contraseña del usuario.
+# Se usa para ESCRIBIR/BORRAR la cookie en el navegador.
 cookie_manager = stx.CookieManager(
     key="mainin_quellaveco_cookie_manager"
 )
@@ -5962,9 +5963,8 @@ def menu_por_rol(rol):
 
 def _secreto_sesion():
     """
-    Clave privada usada solamente para firmar el token de sesión.
-    Se reutiliza SUPABASE_ADMIN_KEY desde Streamlit Secrets.
-    La clave nunca se envía al navegador.
+    Usa una clave privada del servidor para firmar el token.
+    Nunca se envía la contraseña al navegador.
     """
     secreto = st.secrets.get("SUPABASE_ADMIN_KEY")
 
@@ -5977,10 +5977,6 @@ def _secreto_sesion():
 
 
 def crear_token_sesion(username):
-    """
-    Crea un token HMAC firmado con:
-    usuario | fecha_de_expiración
-    """
     expira = int(
         (
             datetime.now(timezone.utc)
@@ -6008,11 +6004,6 @@ def crear_token_sesion(username):
 
 
 def validar_token_sesion(token):
-    """
-    Devuelve el username únicamente cuando:
-    - la firma es válida
-    - el token no ha expirado
-    """
     try:
         payload_b64, firma_recibida = str(token).split(".", 1)
 
@@ -6035,13 +6026,8 @@ def validar_token_sesion(token):
         ).decode("utf-8")
 
         username, expira_txt = payload.rsplit("|", 1)
-        expira = int(expira_txt)
 
-        ahora = int(
-            datetime.now(timezone.utc).timestamp()
-        )
-
-        if ahora >= expira:
+        if int(datetime.now(timezone.utc).timestamp()) >= int(expira_txt):
             return None
 
         return username.strip() or None
@@ -6050,10 +6036,48 @@ def validar_token_sesion(token):
         return None
 
 
+def leer_token_sesion_persistente():
+    """
+    En un refresh completo, st.context.cookies es la fuente principal
+    porque contiene las cookies enviadas en la petición inicial.
+
+    CookieManager queda como respaldo para versiones antiguas de Streamlit.
+    """
+
+    # 1) Lectura síncrona desde la petición inicial del navegador
+    try:
+        cookies_contexto = st.context.cookies
+        token = cookies_contexto.get(COOKIE_SESION)
+
+        if token:
+            return str(token)
+
+    except Exception:
+        pass
+
+    # 2) Respaldo mediante el componente
+    try:
+        cookies_componente = cookie_manager.get_all(
+            key="mainin_leer_cookies_sesion"
+        ) or {}
+
+        token = cookies_componente.get(
+            COOKIE_SESION
+        )
+
+        if token:
+            return str(token)
+
+    except Exception:
+        pass
+
+    return None
+
+
 def guardar_sesion_persistente(username):
     """
-    Guarda únicamente el token firmado.
-    La contraseña nunca se almacena.
+    Guarda un token firmado por 7 días.
+    No almacena la contraseña.
     """
     token = crear_token_sesion(username)
 
@@ -6066,9 +6090,12 @@ def guardar_sesion_persistente(username):
             datetime.now()
             + timedelta(days=DIAS_SESION_PERSISTENTE)
         ),
+        max_age=COOKIE_MAX_AGE,
         secure=True,
-        same_site="strict"
+        same_site="lax"
     )
+
+    return token
 
 
 def eliminar_sesion_persistente():
@@ -6112,12 +6139,7 @@ if "usuario_logueado" not in st.session_state:
 # =====================================================
 if st.session_state["usuario_logueado"] is None:
 
-    try:
-        token_guardado = cookie_manager.get(
-            COOKIE_SESION
-        )
-    except Exception:
-        token_guardado = None
+    token_guardado = leer_token_sesion_persistente()
 
     if token_guardado:
 
@@ -6150,9 +6172,7 @@ if st.session_state["usuario_logueado"] is None:
 
                 if rol_valido and area_valida:
 
-                    usuario_guardado["rol"] = (
-                        rol_guardado
-                    )
+                    usuario_guardado["rol"] = rol_guardado
 
                     st.session_state[
                         "usuario_logueado"
@@ -6237,8 +6257,7 @@ if st.session_state["usuario_logueado"] is None:
             "Mantener sesión iniciada",
             value=True,
             help=(
-                "Mantiene el acceso por 7 días en este navegador. "
-                "En equipos compartidos, desactive esta opción."
+                "Mantiene el acceso durante 7 días en este navegador."
             )
         )
 
@@ -6285,14 +6304,22 @@ if st.session_state["usuario_logueado"] is None:
                     ] = usuario
 
                     if mantener_sesion:
+
                         guardar_sesion_persistente(
                             usuario.get(
                                 "username",
                                 username.strip()
                             )
                         )
+
+                        # CookieManager es un componente del navegador.
+                        # Damos tiempo a que la escritura termine antes
+                        # del rerun; esto evita perder la cookie.
+                        time.sleep(1.0)
+
                     else:
                         eliminar_sesion_persistente()
+                        time.sleep(0.25)
 
                     st.rerun()
 
@@ -6382,6 +6409,7 @@ with st.sidebar:
         use_container_width=True
     ):
         eliminar_sesion_persistente()
+        time.sleep(0.35)
         st.session_state["usuario_logueado"] = None
         st.rerun()
 
