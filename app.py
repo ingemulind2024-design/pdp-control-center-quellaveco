@@ -1,4 +1,5 @@
 import io
+import base64
 import hashlib
 import hmac
 from pathlib import Path
@@ -10,9 +11,10 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
+import extra_streamlit_components as stx
 
 from PIL import Image, ImageOps
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -41,6 +43,20 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="auto"
 )
+
+
+# =====================================================
+# SESIÓN PERSISTENTE EN EL NAVEGADOR
+# =====================================================
+COOKIE_SESION = "mainin_quellaveco_session"
+DIAS_SESION_PERSISTENTE = 7
+
+# CookieManager solo guarda un token firmado.
+# Nunca se almacena la contraseña del usuario.
+cookie_manager = stx.CookieManager(
+    key="mainin_quellaveco_cookie_manager"
+)
+
 
 
 # =====================================================
@@ -5944,6 +5960,127 @@ def menu_por_rol(rol):
 # LOGIN Y CONTROL DE ACCESO
 # =====================================================
 
+def _secreto_sesion():
+    """
+    Clave privada usada solamente para firmar el token de sesión.
+    Se reutiliza SUPABASE_ADMIN_KEY desde Streamlit Secrets.
+    La clave nunca se envía al navegador.
+    """
+    secreto = st.secrets.get("SUPABASE_ADMIN_KEY")
+
+    if not secreto:
+        raise RuntimeError(
+            "No existe SUPABASE_ADMIN_KEY para firmar la sesión."
+        )
+
+    return str(secreto)
+
+
+def crear_token_sesion(username):
+    """
+    Crea un token HMAC firmado con:
+    usuario | fecha_de_expiración
+    """
+    expira = int(
+        (
+            datetime.now(timezone.utc)
+            + timedelta(days=DIAS_SESION_PERSISTENTE)
+        ).timestamp()
+    )
+
+    payload = f"{str(username).strip()}|{expira}"
+
+    payload_b64 = (
+        base64.urlsafe_b64encode(
+            payload.encode("utf-8")
+        )
+        .decode("ascii")
+        .rstrip("=")
+    )
+
+    firma = hmac.new(
+        _secreto_sesion().encode("utf-8"),
+        payload_b64.encode("ascii"),
+        hashlib.sha256
+    ).hexdigest()
+
+    return f"{payload_b64}.{firma}"
+
+
+def validar_token_sesion(token):
+    """
+    Devuelve el username únicamente cuando:
+    - la firma es válida
+    - el token no ha expirado
+    """
+    try:
+        payload_b64, firma_recibida = str(token).split(".", 1)
+
+        firma_esperada = hmac.new(
+            _secreto_sesion().encode("utf-8"),
+            payload_b64.encode("ascii"),
+            hashlib.sha256
+        ).hexdigest()
+
+        if not hmac.compare_digest(
+            firma_esperada,
+            firma_recibida
+        ):
+            return None
+
+        padding = "=" * (-len(payload_b64) % 4)
+
+        payload = base64.urlsafe_b64decode(
+            payload_b64 + padding
+        ).decode("utf-8")
+
+        username, expira_txt = payload.rsplit("|", 1)
+        expira = int(expira_txt)
+
+        ahora = int(
+            datetime.now(timezone.utc).timestamp()
+        )
+
+        if ahora >= expira:
+            return None
+
+        return username.strip() or None
+
+    except Exception:
+        return None
+
+
+def guardar_sesion_persistente(username):
+    """
+    Guarda únicamente el token firmado.
+    La contraseña nunca se almacena.
+    """
+    token = crear_token_sesion(username)
+
+    cookie_manager.set(
+        COOKIE_SESION,
+        token,
+        key="mainin_guardar_sesion",
+        path="/",
+        expires_at=(
+            datetime.now()
+            + timedelta(days=DIAS_SESION_PERSISTENTE)
+        ),
+        secure=True,
+        same_site="strict"
+    )
+
+
+def eliminar_sesion_persistente():
+    try:
+        cookie_manager.delete(
+            COOKIE_SESION,
+            key="mainin_eliminar_sesion"
+        )
+    except Exception:
+        pass
+
+
 def obtener_usuario(username):
     resultado = (
         supabase
@@ -5968,6 +6105,67 @@ def obtener_usuario(username):
 
 if "usuario_logueado" not in st.session_state:
     st.session_state["usuario_logueado"] = None
+
+
+# =====================================================
+# RESTAURAR SESIÓN PERSISTENTE
+# =====================================================
+if st.session_state["usuario_logueado"] is None:
+
+    try:
+        token_guardado = cookie_manager.get(
+            COOKIE_SESION
+        )
+    except Exception:
+        token_guardado = None
+
+    if token_guardado:
+
+        username_guardado = validar_token_sesion(
+            token_guardado
+        )
+
+        if username_guardado:
+
+            usuario_guardado = obtener_usuario(
+                username_guardado
+            )
+
+            if usuario_guardado is not None:
+
+                rol_guardado = normalizar_rol(
+                    usuario_guardado.get("rol")
+                )
+
+                rol_valido = (
+                    rol_guardado in ROLES_PERMITIDOS
+                )
+
+                area_valida = (
+                    rol_guardado == "admin"
+                    or bool(
+                        usuario_guardado.get("area_id")
+                    )
+                )
+
+                if rol_valido and area_valida:
+
+                    usuario_guardado["rol"] = (
+                        rol_guardado
+                    )
+
+                    st.session_state[
+                        "usuario_logueado"
+                    ] = usuario_guardado
+
+                else:
+                    eliminar_sesion_persistente()
+
+            else:
+                eliminar_sesion_persistente()
+
+        else:
+            eliminar_sesion_persistente()
 
 
 # =====================================================
@@ -6035,6 +6233,15 @@ if st.session_state["usuario_logueado"] is None:
             placeholder="Contraseña"
         )
 
+        mantener_sesion = st.checkbox(
+            "Mantener sesión iniciada",
+            value=True,
+            help=(
+                "Mantiene el acceso por 7 días en este navegador. "
+                "En equipos compartidos, desactive esta opción."
+            )
+        )
+
         if st.button(
             "Ingresar al Control Center",
             type="primary",
@@ -6076,6 +6283,16 @@ if st.session_state["usuario_logueado"] is None:
                     st.session_state[
                         "usuario_logueado"
                     ] = usuario
+
+                    if mantener_sesion:
+                        guardar_sesion_persistente(
+                            usuario.get(
+                                "username",
+                                username.strip()
+                            )
+                        )
+                    else:
+                        eliminar_sesion_persistente()
 
                     st.rerun()
 
@@ -6164,6 +6381,7 @@ with st.sidebar:
         "↪  Cerrar sesión",
         use_container_width=True
     ):
+        eliminar_sesion_persistente()
         st.session_state["usuario_logueado"] = None
         st.rerun()
 
