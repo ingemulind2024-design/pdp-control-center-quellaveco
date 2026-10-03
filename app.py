@@ -3440,9 +3440,9 @@ def crear_curva_s_tiempo_real(
     """
     Curva S visual unificada para ADMIN y PLANNER.
     - PLAN azul / REAL rojo.
-    - Valor visible en cada punto.
+    - Valores visibles, separados con offsets para evitar solapamientos.
     - Línea vertical de hora actual durante la ejecución.
-    - Resalta el punto EN VIVO incluido por build_s_curve().
+    - Punto EN VIVO pequeño y circular.
     """
 
     if curva is None or curva.empty:
@@ -3467,63 +3467,35 @@ def crear_curva_s_tiempo_real(
     fin = data["fecha"].max()
     en_ejecucion = bool(inicio <= ahora_lima <= fin)
 
-    plan_texto = [
-        f"{float(valor):.1f}%" if pd.notna(valor) else ""
-        for valor in data["PLAN"]
-    ]
-    real_texto = [
-        f"{float(valor):.1f}%" if pd.notna(valor) else ""
-        for valor in data["REAL"]
-    ]
-
-    # Alternar ligeramente la posición reduce cruces entre etiquetas
-    # cuando se consulta desde un celular estrecho.
-    posiciones_plan_base = ["top left", "top center", "top right"]
-    posiciones_real_base = ["bottom left", "bottom center", "bottom right"]
-    posiciones_plan = [
-        posiciones_plan_base[i % len(posiciones_plan_base)]
-        for i in range(len(data))
-    ]
-    posiciones_real = [
-        posiciones_real_base[i % len(posiciones_real_base)]
-        for i in range(len(data))
-    ]
-
     figura = go.Figure()
 
-    # Zona transcurrida: muy sutil para no ensuciar la lectura.
+    # Zona transcurrida, muy sutil.
     if en_ejecucion:
         figura.add_vrect(
             x0=inicio,
             x1=ahora_lima,
-            fillcolor="rgba(21,94,239,0.025)",
+            fillcolor="rgba(21,94,239,0.020)",
             line_width=0,
             layer="below"
         )
 
+    # PLAN
     figura.add_trace(
         go.Scatter(
             x=data["fecha"],
             y=data["PLAN"],
-            mode="lines+markers+text",
+            mode="lines+markers",
             name="PLAN",
-            text=plan_texto,
-            textposition=posiciones_plan,
-            textfont=dict(
-                size=10,
-                color="#155EEF"
-            ),
-            cliponaxis=False,
             line=dict(
-                width=3.6,
+                width=3.4,
                 shape="spline",
                 smoothing=1.0,
                 color="#155EEF"
             ),
             marker=dict(
-                size=8,
+                size=7,
                 color="#155EEF",
-                line=dict(width=1.4, color="#FFFFFF")
+                line=dict(width=1.2, color="#FFFFFF")
             ),
             hovertemplate=(
                 "<b>PLAN</b><br>"
@@ -3534,29 +3506,23 @@ def crear_curva_s_tiempo_real(
         )
     )
 
+    # REAL
     figura.add_trace(
         go.Scatter(
             x=data["fecha"],
             y=data["REAL"],
-            mode="lines+markers+text",
+            mode="lines+markers",
             name="REAL",
-            text=real_texto,
-            textposition=posiciones_real,
-            textfont=dict(
-                size=10,
-                color="#D92D20"
-            ),
-            cliponaxis=False,
             line=dict(
-                width=4.0,
+                width=3.6,
                 shape="spline",
                 smoothing=1.0,
                 color="#D92D20"
             ),
             marker=dict(
-                size=8,
+                size=7,
                 color="#D92D20",
-                line=dict(width=1.4, color="#FFFFFF")
+                line=dict(width=1.2, color="#FFFFFF")
             ),
             connectgaps=False,
             hovertemplate=(
@@ -3568,10 +3534,89 @@ def crear_curva_s_tiempo_real(
         )
     )
 
+    # -----------------------------------------------------
+    # ETIQUETAS DE CADA PUNTO
+    # Se dibujan como annotations para controlar x/y en píxeles.
+    # PLAN siempre arriba, REAL siempre abajo.
+    # Si ambos valores están cerca, aumenta la separación.
+    # -----------------------------------------------------
+    for i, fila in data.reset_index(drop=True).iterrows():
+
+        fecha = fila["fecha"]
+        plan = fila.get("PLAN")
+        real = fila.get("REAL")
+
+        plan_val = float(plan) if pd.notna(plan) else None
+        real_val = float(real) if pd.notna(real) else None
+
+        cercania = (
+            abs(plan_val - real_val)
+            if plan_val is not None and real_val is not None
+            else 999
+        )
+
+        if cercania <= 3:
+            shift_plan_y = 23
+            shift_real_y = -23
+        elif cercania <= 8:
+            shift_plan_y = 18
+            shift_real_y = -18
+        else:
+            shift_plan_y = 13
+            shift_real_y = -13
+
+        # Pequeño movimiento horizontal alternado.
+        # En el punto cercano a AHORA se separan a izquierda/derecha.
+        xshift_plan = [-7, 0, 7][i % 3]
+        xshift_real = [7, 0, -7][i % 3]
+
+        if en_ejecucion and abs(fecha - ahora_lima) <= pd.Timedelta(minutes=5):
+            xshift_plan = -16
+            xshift_real = 16
+
+        if plan_val is not None:
+            figura.add_annotation(
+                x=fecha,
+                y=plan_val,
+                text=f"{plan_val:.1f}%",
+                showarrow=False,
+                xshift=xshift_plan,
+                yshift=shift_plan_y,
+                xanchor="center",
+                yanchor="middle",
+                bgcolor="rgba(255,255,255,0.82)",
+                bordercolor="rgba(255,255,255,0)",
+                borderpad=1.5,
+                font=dict(
+                    size=9,
+                    color="#155EEF"
+                )
+            )
+
+        if real_val is not None:
+            figura.add_annotation(
+                x=fecha,
+                y=real_val,
+                text=f"{real_val:.1f}%",
+                showarrow=False,
+                xshift=xshift_real,
+                yshift=shift_real_y,
+                xanchor="center",
+                yanchor="middle",
+                bgcolor="rgba(255,255,255,0.82)",
+                bordercolor="rgba(255,255,255,0)",
+                borderpad=1.5,
+                font=dict(
+                    size=9,
+                    color="#D92D20"
+                )
+            )
+
     info_vivo = None
 
     if en_ejecucion:
-        # Línea vertical de tiempo real estilo sala de control.
+
+        # Línea de tiempo real más fina para no competir con los datos.
         figura.add_shape(
             type="line",
             x0=ahora_lima,
@@ -3582,7 +3627,7 @@ def crear_curva_s_tiempo_real(
             yref="paper",
             line=dict(
                 color="#0B1F33",
-                width=2,
+                width=1.5,
                 dash="dash"
             ),
             layer="above"
@@ -3599,15 +3644,13 @@ def crear_curva_s_tiempo_real(
             yanchor="bottom",
             bgcolor="#0B1F33",
             bordercolor="#0B1F33",
-            borderpad=5,
+            borderpad=4,
             font=dict(
                 color="#FFFFFF",
-                size=10
+                size=9
             )
         )
 
-        # El punto en vivo ya viene incluido en build_s_curve().
-        # Elegimos el registro más cercano a la hora actual para resaltarlo.
         diferencias = (
             data["fecha"] - ahora_lima
         ).abs()
@@ -3615,17 +3658,20 @@ def crear_curva_s_tiempo_real(
         fila_vivo = data.loc[idx_vivo]
 
         if diferencias.loc[idx_vivo] <= pd.Timedelta(minutes=5):
+
             plan_vivo = (
                 float(fila_vivo["PLAN"])
                 if pd.notna(fila_vivo["PLAN"])
                 else None
             )
+
             real_vivo = (
                 float(fila_vivo["REAL"])
                 if pd.notna(fila_vivo["REAL"])
                 else None
             )
 
+            # Punto circular pequeño. Reemplaza el rombo grande.
             for serie, valor, color in [
                 ("PLAN", plan_vivo, "#155EEF"),
                 ("REAL", real_vivo, "#D92D20")
@@ -3639,12 +3685,12 @@ def crear_curva_s_tiempo_real(
                         y=[valor],
                         mode="markers",
                         marker=dict(
-                            size=15,
-                            symbol="diamond",
-                            color="#FFFFFF",
+                            size=9,
+                            symbol="circle",
+                            color=color,
                             line=dict(
-                                width=3,
-                                color=color
+                                width=2,
+                                color="#FFFFFF"
                             )
                         ),
                         name=f"{serie} EN VIVO",
@@ -3664,6 +3710,7 @@ def crear_curva_s_tiempo_real(
                     if real_vivo is not None
                     else None
                 )
+
                 info_vivo = {
                     "ahora": ahora_lima,
                     "plan": plan_vivo,
@@ -3683,7 +3730,7 @@ def crear_curva_s_tiempo_real(
         xaxis=dict(
             title="Fecha / hora",
             tickformat="%d/%m\n%H:%M",
-            nticks=9,
+            nticks=8,
             showgrid=True,
             gridwidth=1,
             gridcolor="#EDF2F7",
@@ -3695,11 +3742,12 @@ def crear_curva_s_tiempo_real(
             title_font=dict(
                 size=11,
                 color="#667085"
-            )
+            ),
+            automargin=True
         ),
         yaxis=dict(
             title="Avance acumulado (%)",
-            range=[-7, 110],
+            range=[-8, 112],
             dtick=20,
             ticksuffix="%",
             showgrid=True,
@@ -3714,7 +3762,8 @@ def crear_curva_s_tiempo_real(
             title_font=dict(
                 size=11,
                 color="#667085"
-            )
+            ),
+            automargin=True
         ),
         legend=dict(
             orientation="h",
@@ -3728,10 +3777,10 @@ def crear_curva_s_tiempo_real(
             )
         ),
         margin=dict(
-            l=48,
-            r=28,
+            l=52,
+            r=34,
             t=76,
-            b=50
+            b=52
         )
     )
 
