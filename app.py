@@ -647,6 +647,55 @@ def aplicar_estilo_profesional():
             line-height:1.2;
         }
 
+
+        /* Curva S · estado en vivo */
+        .curve-live-strip {
+            display:flex;
+            align-items:center;
+            flex-wrap:wrap;
+            gap:7px;
+            margin:.18rem 0 .55rem;
+            padding:7px 9px;
+            border:1px solid #DCE5EE;
+            border-radius:11px;
+            background:linear-gradient(180deg,#FFFFFF 0%,#F8FAFC 100%);
+            box-shadow:0 4px 12px rgba(11,31,51,.035);
+            color:#53657A;
+            font-size:10px;
+            font-weight:700;
+        }
+        .curve-live-now {
+            display:inline-flex;
+            align-items:center;
+            gap:6px;
+            color:#173A5E;
+            font-weight:850;
+            padding-right:3px;
+        }
+        .curve-live-now:before {
+            content:"";
+            width:7px;
+            height:7px;
+            border-radius:50%;
+            background:#0EA5E9;
+            box-shadow:0 0 0 4px rgba(14,165,233,.10);
+        }
+        .curve-chip {
+            display:inline-flex;
+            align-items:center;
+            gap:4px;
+            padding:4px 7px;
+            border-radius:999px;
+            background:#F5F8FC;
+            border:1px solid #E1E8F0;
+            color:#53657A;
+        }
+        .curve-chip strong { color:#0B1F33; font-weight:850; }
+        .curve-chip.plan strong { color:#155EEF; }
+        .curve-chip.real strong { color:#D92D20; }
+        .curve-chip.good strong { color:#079455; }
+        .curve-chip.risk strong { color:#D92D20; }
+
         @media (max-width: 1100px) {
             .exec-kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
             .exec-mini-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
@@ -1043,6 +1092,12 @@ def aplicar_estilo_profesional():
             .exec-kpi-foot { display:none; }
             .planner-kpi-grid { grid-template-columns:1fr 1fr; }
             .planner-kpi-foot { display:none; }
+            .curve-live-strip {
+                gap:5px;
+                padding:6px 7px;
+                font-size:9px;
+            }
+            .curve-chip { padding:3px 6px; }
             .login-brand-title { font-size:22px; }
         }
 
@@ -3376,6 +3431,346 @@ def build_s_curve(
         ] = 0.0
 
     return curva
+
+
+def crear_curva_s_tiempo_real(
+    curva: pd.DataFrame,
+    altura: int = 480
+):
+    """
+    Curva S visual unificada para ADMIN y PLANNER.
+    - PLAN azul / REAL rojo.
+    - Valor visible en cada punto.
+    - Línea vertical de hora actual durante la ejecución.
+    - Resalta el punto EN VIVO incluido por build_s_curve().
+    """
+
+    if curva is None or curva.empty:
+        return go.Figure(), None
+
+    data = curva.copy()
+    data["fecha"] = pd.to_datetime(
+        data["fecha"],
+        errors="coerce"
+    )
+    data = data.dropna(subset=["fecha"]).sort_values("fecha")
+
+    if data.empty:
+        return go.Figure(), None
+
+    ahora_lima = (
+        pd.Timestamp.now(tz="America/Lima")
+        .tz_localize(None)
+    )
+
+    inicio = data["fecha"].min()
+    fin = data["fecha"].max()
+    en_ejecucion = bool(inicio <= ahora_lima <= fin)
+
+    plan_texto = [
+        f"{float(valor):.1f}%" if pd.notna(valor) else ""
+        for valor in data["PLAN"]
+    ]
+    real_texto = [
+        f"{float(valor):.1f}%" if pd.notna(valor) else ""
+        for valor in data["REAL"]
+    ]
+
+    # Alternar ligeramente la posición reduce cruces entre etiquetas
+    # cuando se consulta desde un celular estrecho.
+    posiciones_plan_base = ["top left", "top center", "top right"]
+    posiciones_real_base = ["bottom left", "bottom center", "bottom right"]
+    posiciones_plan = [
+        posiciones_plan_base[i % len(posiciones_plan_base)]
+        for i in range(len(data))
+    ]
+    posiciones_real = [
+        posiciones_real_base[i % len(posiciones_real_base)]
+        for i in range(len(data))
+    ]
+
+    figura = go.Figure()
+
+    # Zona transcurrida: muy sutil para no ensuciar la lectura.
+    if en_ejecucion:
+        figura.add_vrect(
+            x0=inicio,
+            x1=ahora_lima,
+            fillcolor="rgba(21,94,239,0.025)",
+            line_width=0,
+            layer="below"
+        )
+
+    figura.add_trace(
+        go.Scatter(
+            x=data["fecha"],
+            y=data["PLAN"],
+            mode="lines+markers+text",
+            name="PLAN",
+            text=plan_texto,
+            textposition=posiciones_plan,
+            textfont=dict(
+                size=10,
+                color="#155EEF"
+            ),
+            cliponaxis=False,
+            line=dict(
+                width=3.6,
+                shape="spline",
+                smoothing=1.0,
+                color="#155EEF"
+            ),
+            marker=dict(
+                size=8,
+                color="#155EEF",
+                line=dict(width=1.4, color="#FFFFFF")
+            ),
+            hovertemplate=(
+                "<b>PLAN</b><br>"
+                "%{x|%d/%m/%Y %H:%M}<br>"
+                "Avance: <b>%{y:.1f}%</b>"
+                "<extra></extra>"
+            )
+        )
+    )
+
+    figura.add_trace(
+        go.Scatter(
+            x=data["fecha"],
+            y=data["REAL"],
+            mode="lines+markers+text",
+            name="REAL",
+            text=real_texto,
+            textposition=posiciones_real,
+            textfont=dict(
+                size=10,
+                color="#D92D20"
+            ),
+            cliponaxis=False,
+            line=dict(
+                width=4.0,
+                shape="spline",
+                smoothing=1.0,
+                color="#D92D20"
+            ),
+            marker=dict(
+                size=8,
+                color="#D92D20",
+                line=dict(width=1.4, color="#FFFFFF")
+            ),
+            connectgaps=False,
+            hovertemplate=(
+                "<b>REAL</b><br>"
+                "%{x|%d/%m/%Y %H:%M}<br>"
+                "Avance: <b>%{y:.1f}%</b>"
+                "<extra></extra>"
+            )
+        )
+    )
+
+    info_vivo = None
+
+    if en_ejecucion:
+        # Línea vertical de tiempo real estilo sala de control.
+        figura.add_shape(
+            type="line",
+            x0=ahora_lima,
+            x1=ahora_lima,
+            y0=0,
+            y1=1,
+            xref="x",
+            yref="paper",
+            line=dict(
+                color="#0B1F33",
+                width=2,
+                dash="dash"
+            ),
+            layer="above"
+        )
+
+        figura.add_annotation(
+            x=ahora_lima,
+            y=1.045,
+            xref="x",
+            yref="paper",
+            text=f"AHORA · {ahora_lima:%d/%m %H:%M}",
+            showarrow=False,
+            xanchor="center",
+            yanchor="bottom",
+            bgcolor="#0B1F33",
+            bordercolor="#0B1F33",
+            borderpad=5,
+            font=dict(
+                color="#FFFFFF",
+                size=10
+            )
+        )
+
+        # El punto en vivo ya viene incluido en build_s_curve().
+        # Elegimos el registro más cercano a la hora actual para resaltarlo.
+        diferencias = (
+            data["fecha"] - ahora_lima
+        ).abs()
+        idx_vivo = diferencias.idxmin()
+        fila_vivo = data.loc[idx_vivo]
+
+        if diferencias.loc[idx_vivo] <= pd.Timedelta(minutes=5):
+            plan_vivo = (
+                float(fila_vivo["PLAN"])
+                if pd.notna(fila_vivo["PLAN"])
+                else None
+            )
+            real_vivo = (
+                float(fila_vivo["REAL"])
+                if pd.notna(fila_vivo["REAL"])
+                else None
+            )
+
+            for serie, valor, color in [
+                ("PLAN", plan_vivo, "#155EEF"),
+                ("REAL", real_vivo, "#D92D20")
+            ]:
+                if valor is None:
+                    continue
+
+                figura.add_trace(
+                    go.Scatter(
+                        x=[fila_vivo["fecha"]],
+                        y=[valor],
+                        mode="markers",
+                        marker=dict(
+                            size=15,
+                            symbol="diamond",
+                            color="#FFFFFF",
+                            line=dict(
+                                width=3,
+                                color=color
+                            )
+                        ),
+                        name=f"{serie} EN VIVO",
+                        showlegend=False,
+                        hovertemplate=(
+                            f"<b>{serie} EN VIVO</b><br>"
+                            "%{x|%d/%m/%Y %H:%M}<br>"
+                            "Avance: <b>%{y:.1f}%</b>"
+                            "<extra></extra>"
+                        )
+                    )
+                )
+
+            if plan_vivo is not None:
+                brecha_vivo = (
+                    real_vivo - plan_vivo
+                    if real_vivo is not None
+                    else None
+                )
+                info_vivo = {
+                    "ahora": ahora_lima,
+                    "plan": plan_vivo,
+                    "real": real_vivo,
+                    "brecha": brecha_vivo
+                }
+
+    figura.update_layout(
+        height=altura,
+        hovermode="x unified",
+        paper_bgcolor="#FFFFFF",
+        plot_bgcolor="#FFFFFF",
+        font=dict(
+            color="#344054",
+            size=12
+        ),
+        xaxis=dict(
+            title="Fecha / hora",
+            tickformat="%d/%m\n%H:%M",
+            nticks=9,
+            showgrid=True,
+            gridwidth=1,
+            gridcolor="#EDF2F7",
+            linecolor="#98A2B3",
+            tickfont=dict(
+                size=10,
+                color="#475467"
+            ),
+            title_font=dict(
+                size=11,
+                color="#667085"
+            )
+        ),
+        yaxis=dict(
+            title="Avance acumulado (%)",
+            range=[-7, 110],
+            dtick=20,
+            ticksuffix="%",
+            showgrid=True,
+            gridwidth=1,
+            gridcolor="#E7EDF4",
+            linecolor="#98A2B3",
+            zeroline=False,
+            tickfont=dict(
+                size=10,
+                color="#475467"
+            ),
+            title_font=dict(
+                size=11,
+                color="#667085"
+            )
+        ),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.075,
+            xanchor="center",
+            x=0.5,
+            font=dict(
+                size=11,
+                color="#344054"
+            )
+        ),
+        margin=dict(
+            l=48,
+            r=28,
+            t=76,
+            b=50
+        )
+    )
+
+    return figura, info_vivo
+
+
+def mostrar_estado_curva_en_vivo(info_vivo):
+    if not info_vivo:
+        return
+
+    plan = info_vivo.get("plan")
+    real = info_vivo.get("real")
+    brecha = info_vivo.get("brecha")
+    ahora = info_vivo.get("ahora")
+
+    real_html = (
+        f"{real:.1f}%"
+        if real is not None
+        else "Sin reporte"
+    )
+
+    if brecha is None:
+        clase_brecha = ""
+        brecha_html = "Sin dato"
+    else:
+        clase_brecha = "good" if brecha >= -5 else "risk"
+        brecha_html = f"{brecha:+.1f} pp"
+
+    st.markdown(
+        f"""
+        <div class="curve-live-strip">
+            <span class="curve-live-now">EN VIVO · {ahora:%H:%M}</span>
+            <span class="curve-chip plan">PLAN <strong>{plan:.1f}%</strong></span>
+            <span class="curve-chip real">REAL <strong>{real_html}</strong></span>
+            <span class="curve-chip {clase_brecha}">BRECHA <strong>{brecha_html}</strong></span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 
 # =====================================================
@@ -6017,111 +6412,15 @@ if rol == "admin":
 
                 else:
 
-                    curva_admin_long = (
-                        curva_admin
-                        .melt(
-                            id_vars=["fecha"],
-                            value_vars=[
-                                "PLAN",
-                                "REAL"
-                            ],
-                            var_name="Curva",
-                            value_name="Avance"
+                    figura_curva_admin, info_curva_admin = (
+                        crear_curva_s_tiempo_real(
+                            curva_admin,
+                            altura=490
                         )
                     )
 
-                    figura_curva_admin = go.Figure()
-
-                    for nombre_curva, posicion_texto, color_curva in [
-                        ("PLAN", "top center", "#155EEF"),
-                        ("REAL", "bottom center", "#D92D20")
-                    ]:
-
-                        datos_curva_admin = (
-                            curva_admin_long[
-                                curva_admin_long["Curva"]
-                                == nombre_curva
-                            ]
-                            .copy()
-                        )
-
-                        etiquetas_admin = [
-                            f"{float(valor):.1f}%"
-                            if pd.notna(valor)
-                            else ""
-                            for valor in datos_curva_admin[
-                                "Avance"
-                            ]
-                        ]
-
-                        figura_curva_admin.add_trace(
-                            go.Scatter(
-                                x=datos_curva_admin["fecha"],
-                                y=datos_curva_admin["Avance"],
-                                mode="lines+markers",
-                                name=nombre_curva,
-                                line=dict(
-                                    width=4,
-                                    shape="spline",
-                                    smoothing=1.05,
-                                    color=color_curva
-                                ),
-                                marker=dict(
-                                    size=7,
-                                    color=color_curva,
-                                    line=dict(
-                                        width=1,
-                                        color="#FFFFFF"
-                                    )
-                                ),
-                                connectgaps=False,
-                                hovertemplate=(
-                                    f"<b>{nombre_curva}</b><br>"
-                                    "%{x|%d/%m/%Y %H:%M}<br>"
-                                    "Avance: %{y:.1f}%"
-                                    "<extra></extra>"
-                                )
-                            )
-                        )
-
-                    figura_curva_admin.update_layout(
-                        height=420,
-                        hovermode="x unified",
-                        paper_bgcolor="#FFFFFF",
-                        plot_bgcolor="#FFFFFF",
-                        font=dict(color="#344054", size=12),
-                        xaxis=dict(
-                            title="Fecha / hora",
-                            tickformat="%d/%m\n%H:%M",
-                            showgrid=True,
-                            gridwidth=1,
-                            gridcolor="#EEF2F6",
-                            linecolor="#D0D5DD"
-                        ),
-                        yaxis=dict(
-                            title="Acumulado (%)",
-                            range=[0, 108],
-                            dtick=20,
-                            ticksuffix="%",
-                            showgrid=True,
-                            gridwidth=1,
-                            gridcolor="#EEF2F6",
-                            linecolor="#D0D5DD",
-                            zeroline=False
-                        ),
-                        legend=dict(
-                            orientation="h",
-                            yanchor="bottom",
-                            y=1.04,
-                            xanchor="center",
-                            x=0.5
-                        ),
-                        margin=dict(
-                            l=50,
-                            r=35,
-                            t=60,
-                            b=55
-                        )
+                    mostrar_estado_curva_en_vivo(
+                        info_curva_admin
                     )
 
                     st.plotly_chart(
@@ -6129,6 +6428,7 @@ if rol == "admin":
                         use_container_width=True,
                         config={
                             "displaylogo": False,
+                            "displayModeBar": False,
                             "responsive": True
                         }
                     )
@@ -10254,7 +10554,14 @@ else:
             # 8. CURVA S
             # =============================================
 
-            st.subheader("Curva S - Plan vs Real")
+            mostrar_titulo_ejecutivo(
+                "Curva S · Plan vs Real",
+                (
+                    "Valores por corte y línea vertical de tiempo real "
+                    "para identificar el punto exacto de ejecución."
+                ),
+                "Seguimiento en vivo"
+            )
 
             if curva_s.empty:
 
@@ -10265,147 +10572,13 @@ else:
 
             else:
 
-                fig_s = go.Figure()
-
-                # Etiquetas de porcentaje por cada punto.
-                texto_plan = [
-                    f"{float(valor):.1f}%"
-                    if pd.notna(valor)
-                    else ""
-                    for valor in curva_s["PLAN"]
-                ]
-
-                texto_real = [
-                    f"{float(valor):.1f}%"
-                    if pd.notna(valor)
-                    else ""
-                    for valor in curva_s["REAL"]
-                ]
-
-                # PLAN
-                fig_s.add_trace(
-                    go.Scatter(
-                        x=curva_s["fecha"],
-                        y=curva_s["PLAN"],
-                        mode="lines+markers",
-                        name="PLAN",
-                        line=dict(
-                            width=4,
-                            shape="spline",
-                            smoothing=1.05
-                        ),
-                        marker=dict(
-                            size=7,
-                            color="#155EEF",
-                            line=dict(width=1, color="#FFFFFF")
-                        ),
-                        hovertemplate=(
-                            "<b>PLAN</b><br>"
-                            "%{x|%d/%m/%Y %H:%M}<br>"
-                            "Avance: %{y:.1f}%"
-                            "<extra></extra>"
-                        )
-                    )
+                fig_s, info_curva_s = crear_curva_s_tiempo_real(
+                    curva_s,
+                    altura=490
                 )
 
-                # REAL
-                fig_s.add_trace(
-                    go.Scatter(
-                        x=curva_s["fecha"],
-                        y=curva_s["REAL"],
-                        mode="lines+markers",
-                        name="REAL",
-                        line=dict(
-                            width=4,
-                            shape="spline",
-                            smoothing=1.05
-                        ),
-                        marker=dict(
-                            size=7,
-                            color="#D92D20",
-                            line=dict(width=1, color="#FFFFFF")
-                        ),
-                        connectgaps=False,
-                        hovertemplate=(
-                            "<b>REAL</b><br>"
-                            "%{x|%d/%m/%Y %H:%M}<br>"
-                            "Avance: %{y:.1f}%"
-                            "<extra></extra>"
-                        )
-                    )
-                )
-
-                fig_s.add_annotation(
-                    x=curva_s.dropna(subset=["PLAN"]).iloc[-1]["fecha"],
-                    y=float(curva_s.dropna(subset=["PLAN"]).iloc[-1]["PLAN"]),
-                    text=f'PLAN {float(curva_s.dropna(subset=["PLAN"]).iloc[-1]["PLAN"]):.1f}%',
-                    showarrow=True,
-                    arrowhead=0,
-                    ax=0,
-                    ay=-28,
-                    bgcolor="#155EEF",
-                    bordercolor="#155EEF",
-                    font=dict(color="white", size=11),
-                    borderpad=4
-                )
-
-                fig_s.add_annotation(
-                    x=curva_s.dropna(subset=["REAL"]).iloc[-1]["fecha"],
-                    y=float(curva_s.dropna(subset=["REAL"]).iloc[-1]["REAL"]),
-                    text=f'REAL {float(curva_s.dropna(subset=["REAL"]).iloc[-1]["REAL"]):.1f}%',
-                    showarrow=True,
-                    arrowhead=0,
-                    ax=0,
-                    ay=28,
-                    bgcolor="#D92D20",
-                    bordercolor="#D92D20",
-                    font=dict(color="white", size=11),
-                    borderpad=4
-                )
-
-                fig_s.update_layout(
-                    xaxis_title="Fecha / Hora",
-                    yaxis_title="Avance acumulado (%)",
-                    paper_bgcolor="#FFFFFF",
-                    plot_bgcolor="#FFFFFF",
-                    font=dict(color="#1F2937", size=14),
-                    yaxis=dict(
-                        range=[0, 108],
-                        ticksuffix="%",
-                        dtick=20,
-                        showgrid=True,
-                        gridwidth=1,
-                        gridcolor="#E5EAF0",
-                        linecolor="#98A2B3",
-                        tickfont=dict(size=12, color="#344054"),
-                        title_font=dict(size=13, color="#344054"),
-                        zeroline=False
-                    ),
-                    xaxis=dict(
-                        showgrid=True,
-                        gridwidth=1,
-                        gridcolor="#F1F5F9",
-                        linecolor="#98A2B3",
-                        tickformat="%d/%m\n%H:%M",
-                        tickfont=dict(size=11, color="#344054"),
-                        title_font=dict(size=13, color="#344054")
-                    ),
-                    hovermode="x unified",
-                    legend=dict(
-                        orientation="h",
-                        yanchor="bottom",
-                        y=1.02,
-                        xanchor="center",
-                        x=0.5,
-                        font=dict(size=12, color="#344054")
-                    ),
-                    margin=dict(
-                        l=48,
-                        r=22,
-                        t=50,
-                        b=52
-                    ),
-                    height=460
+                mostrar_estado_curva_en_vivo(
+                    info_curva_s
                 )
 
                 st.plotly_chart(
