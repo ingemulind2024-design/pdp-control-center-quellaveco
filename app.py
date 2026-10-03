@@ -6116,6 +6116,30 @@ def guardar_sesion_persistente(username):
 
 
 def eliminar_sesion_persistente():
+    """
+    Elimina la cookie de sesión de forma robusta.
+
+    Se expira explícitamente usando el mismo path="/"
+    con el que fue creada. Después se ejecuta delete()
+    como limpieza adicional.
+    """
+    try:
+        cookie_manager.set(
+            COOKIE_SESION,
+            "",
+            key="mainin_expirar_sesion",
+            path="/",
+            expires_at=(
+                datetime.now()
+                - timedelta(days=1)
+            ),
+            max_age=0,
+            secure=True,
+            same_site="lax"
+        )
+    except Exception:
+        pass
+
     try:
         cookie_manager.delete(
             COOKIE_SESION,
@@ -6150,11 +6174,17 @@ def obtener_usuario(username):
 if "usuario_logueado" not in st.session_state:
     st.session_state["usuario_logueado"] = None
 
+if "logout_en_proceso" not in st.session_state:
+    st.session_state["logout_en_proceso"] = False
+
 
 # =====================================================
 # RESTAURAR SESIÓN PERSISTENTE
 # =====================================================
-if st.session_state["usuario_logueado"] is None:
+if (
+    st.session_state["usuario_logueado"] is None
+    and not st.session_state["logout_en_proceso"]
+):
 
     token_guardado = leer_token_sesion_persistente()
 
@@ -6343,6 +6373,10 @@ if st.session_state["usuario_logueado"] is None:
                         "usuario_logueado"
                     ] = usuario
 
+                    st.session_state[
+                        "logout_en_proceso"
+                    ] = False
+
                     if mantener_sesion:
 
                         guardar_sesion_persistente(
@@ -6448,8 +6482,19 @@ with st.sidebar:
         "↪  Cerrar sesión",
         use_container_width=True
     ):
+        # Primero bloqueamos cualquier restauración automática
+        # dentro de esta misma sesión de Streamlit.
+        st.session_state[
+            "logout_en_proceso"
+        ] = True
+
+        # Luego vencemos la cookie persistente del navegador.
         eliminar_sesion_persistente()
-        time.sleep(0.35)
+
+        # CookieManager trabaja en el frontend; damos tiempo
+        # a que el navegador procese la expiración antes del rerun.
+        time.sleep(1.0)
+
         st.session_state["usuario_logueado"] = None
         st.rerun()
 
