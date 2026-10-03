@@ -2056,6 +2056,23 @@ AREAS = [
     "INSTRUMENTACION"
 ]
 
+
+USUARIOS_LOGIN = [
+    "super_elec",
+    "super_inst",
+    "planner_elec",
+    "planner_inst",
+    "adm_quellaveco"
+]
+
+ETIQUETAS_USUARIOS_LOGIN = {
+    "super_elec": "super_elec · Supervisor Electricidad",
+    "super_inst": "super_inst · Supervisor Instrumentación",
+    "planner_elec": "planner_elec · Planner Electricidad",
+    "planner_inst": "planner_inst · Planner Instrumentación",
+    "adm_quellaveco": "adm_quellaveco · Administrador"
+}
+
 # =====================================================
 # FUNCIONES DE IMPORTACIÓN
 # =====================================================
@@ -6242,9 +6259,21 @@ if st.session_state["usuario_logueado"] is None:
             unsafe_allow_html=True
         )
 
-        username = st.text_input(
+        username = st.selectbox(
             "Usuario",
-            placeholder="Usuario"
+            options=USUARIOS_LOGIN,
+            index=None,
+            placeholder="Buscar o seleccionar usuario",
+            format_func=lambda usuario_login: (
+                ETIQUETAS_USUARIOS_LOGIN.get(
+                    usuario_login,
+                    usuario_login
+                )
+            ),
+            help=(
+                "Seleccione su usuario. También puede escribir "
+                "para buscarlo dentro de la lista."
+            )
         )
 
         password = st.text_input(
@@ -6267,9 +6296,20 @@ if st.session_state["usuario_logueado"] is None:
             use_container_width=True
         ):
 
-            usuario = obtener_usuario(username.strip())
+            if not username:
+                st.warning(
+                    "Seleccione un usuario antes de ingresar."
+                )
+                usuario = None
+            else:
+                usuario = obtener_usuario(
+                    str(username).strip()
+                )
 
-            if usuario is None:
+            if not username:
+                pass
+
+            elif usuario is None:
                 st.error("Usuario no encontrado o inactivo.")
 
             else:
@@ -6308,7 +6348,7 @@ if st.session_state["usuario_logueado"] is None:
                         guardar_sesion_persistente(
                             usuario.get(
                                 "username",
-                                username.strip()
+                                str(username or "").strip()
                             )
                         )
 
