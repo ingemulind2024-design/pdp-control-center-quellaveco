@@ -12688,7 +12688,7 @@ else:
                 supabase
                 .table("actividades")
                 .select(
-                    "id,ot_id,codigo_actividad,descripcion"
+                    "id,ot_id,codigo_actividad,descripcion,supervisor"
                 )
                 .in_("ot_id", ids_ots_evidencias)
                 .eq("activo", True)
@@ -12757,10 +12757,54 @@ else:
                         {
                             str(ot.get("ot", ""))
                             for ot in ots_area
+                            if str(ot.get("ot", "")).strip()
                         }
                     )
 
-                    f1, f2 = st.columns(2)
+                    supervisores_disponibles = sorted(
+                        {
+                            str(
+                                actividad.get(
+                                    "supervisor",
+                                    ""
+                                )
+                                or ""
+                            ).strip()
+                            for actividad in actividades_evidencias
+                            if str(
+                                actividad.get(
+                                    "supervisor",
+                                    ""
+                                )
+                                or ""
+                            ).strip()
+                        }
+                    )
+
+                    hay_sin_supervisor = any(
+                        not str(
+                            actividad.get(
+                                "supervisor",
+                                ""
+                            )
+                            or ""
+                        ).strip()
+                        for actividad in actividades_evidencias
+                    )
+
+                    opciones_supervisor = ["TODOS"]
+
+                    if supervisores_disponibles:
+                        opciones_supervisor.extend(
+                            supervisores_disponibles
+                        )
+
+                    if hay_sin_supervisor:
+                        opciones_supervisor.append(
+                            "SIN SUPERVISOR"
+                        )
+
+                    f1, f2, f3 = st.columns(3)
 
                     with f1:
 
@@ -12771,6 +12815,14 @@ else:
                         )
 
                     with f2:
+
+                        filtro_supervisor_evidencias = st.selectbox(
+                            "Supervisor",
+                            opciones_supervisor,
+                            key="filtro_evidencias_supervisor"
+                        )
+
+                    with f3:
 
                         filtro_tipo_evidencias = st.selectbox(
                             "Tipo de evidencia",
@@ -12803,6 +12855,32 @@ else:
                             filtro_ot_evidencias != "TODAS"
                             and str(ot.get("ot", ""))
                             != filtro_ot_evidencias
+                        ):
+                            continue
+
+                        supervisor_actividad = str(
+                            actividad.get(
+                                "supervisor",
+                                ""
+                            )
+                            or ""
+                        ).strip()
+
+                        if (
+                            filtro_supervisor_evidencias
+                            == "SIN SUPERVISOR"
+                            and supervisor_actividad
+                        ):
+                            continue
+
+                        if (
+                            filtro_supervisor_evidencias
+                            not in {
+                                "TODOS",
+                                "SIN SUPERVISOR"
+                            }
+                            and supervisor_actividad
+                            != filtro_supervisor_evidencias
                         ):
                             continue
 
@@ -12848,7 +12926,7 @@ else:
                             expanded=False
                         ):
 
-                            d1, d2, d3 = st.columns(3)
+                            d1, d2, d3, d4 = st.columns(4)
 
                             with d1:
                                 st.write(
@@ -12858,11 +12936,17 @@ else:
 
                             with d2:
                                 st.write(
+                                    "**Supervisor:** "
+                                    f"{actividad.get('supervisor') or 'Sin asignar'}"
+                                )
+
+                            with d3:
+                                st.write(
                                     "**Usuario:** "
                                     f"{registro.get('usuario', '')}"
                                 )
 
-                            with d3:
+                            with d4:
                                 fecha_evidencia = pd.to_datetime(
                                     registro.get("fecha_registro"),
                                     errors="coerce",
