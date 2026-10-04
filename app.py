@@ -6358,7 +6358,7 @@ def construir_pdf_supervisor(
             [
                 "OT",
                 "Equipo",
-                "Actividad",
+                "Grupo",
                 "Descripción",
                 "Plan",
                 "Real",
@@ -6419,10 +6419,10 @@ def construir_pdf_supervisor(
                 Paragraph(
                     str(
                         fila.get(
-                            "codigo_actividad",
+                            "grupo",
                             ""
                         )
-                        or ""
+                        or "Sin grupo"
                     ),
                     estilo_tabla
                 ),
@@ -11626,7 +11626,7 @@ if rol == "admin":
                                     [
                                         "ot",
                                         "equipo",
-                                        "codigo_actividad",
+                                        "grupo",
                                         "descripcion",
                                         "PLAN ACTUAL (%)",
                                         "avance_real",
@@ -11638,7 +11638,7 @@ if rol == "admin":
                                     columns={
                                         "ot": "OT",
                                         "equipo": "EQUIPO",
-                                        "codigo_actividad": "ACTIVIDAD",
+                                        "grupo": "GRUPO",
                                         "descripcion": "DESCRIPCIÓN",
                                         "PLAN ACTUAL (%)": "PLAN (%)",
                                         "avance_real": "REAL (%)",
@@ -15084,7 +15084,7 @@ else:
                                 [
                                     "ot",
                                     "equipo",
-                                    "codigo_actividad",
+                                    "grupo",
                                     "descripcion",
                                     "PLAN ACTUAL (%)",
                                     "avance_real",
@@ -15096,7 +15096,7 @@ else:
                                 columns={
                                     "ot": "OT",
                                     "equipo": "EQUIPO",
-                                    "codigo_actividad": "ACTIVIDAD",
+                                    "grupo": "GRUPO",
                                     "descripcion": "DESCRIPCIÓN",
                                     "PLAN ACTUAL (%)": "PLAN (%)",
                                     "avance_real": "REAL (%)",
