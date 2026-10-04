@@ -13236,15 +13236,149 @@ else:
                         "fotografía(s) seleccionada(s)."
                     )
 
+                # ============================================
+                # PROTECCIÓN CONTRA DOBLE REGISTRO
+                # ============================================
+                # Creamos una huella del contenido actual.
+                # Si el usuario vuelve a presionar Guardar sin
+                # modificar nada, NO se inserta un segundo registro.
+                nombres_evidencias_actuales = sorted(
+                    [
+                        str(
+                            getattr(
+                                archivo,
+                                "name",
+                                ""
+                            )
+                            or ""
+                        )
+                        for archivo in (
+                            archivos_evidencia
+                            or []
+                        )
+                    ]
+                )
+
+                tamanos_evidencias_actuales = sorted(
+                    [
+                        int(
+                            getattr(
+                                archivo,
+                                "size",
+                                0
+                            )
+                            or 0
+                        )
+                        for archivo in (
+                            archivos_evidencia
+                            or []
+                        )
+                    ]
+                )
+
+                contenido_huella_avance = "|".join([
+                    str(actividad["id"]),
+                    str(int(avance)),
+                    str(tipo_evidencia),
+                    str(bool(critica)),
+                    descripcion_avance.strip(),
+                    observaciones.strip(),
+                    ",".join(
+                        nombres_evidencias_actuales
+                    ),
+                    ",".join(
+                        str(valor)
+                        for valor
+                        in tamanos_evidencias_actuales
+                    )
+                ])
+
+                huella_avance_actual = (
+                    hashlib.sha256(
+                        contenido_huella_avance.encode(
+                            "utf-8"
+                        )
+                    ).hexdigest()
+                )
+
+                clave_huella_guardada = (
+                    f"avance_guardado_huella_"
+                    f"{actividad['id']}"
+                )
+
+                registro_ya_guardado = (
+                    st.session_state.get(
+                        clave_huella_guardada
+                    )
+                    == huella_avance_actual
+                )
+
+                clave_boton_guardar = (
+                    f"guardar_avance_"
+                    f"{actividad['id']}"
+                )
+
+                # Cuando el mismo registro ya fue cargado,
+                # el botón se muestra en VERDE.
+                if registro_ya_guardado:
+
+                    st.markdown(
+                        f"""
+                        <style>
+                        .st-key-{clave_boton_guardar} button {{
+                            background: linear-gradient(
+                                135deg,
+                                #12B76A 0%,
+                                #079455 100%
+                            ) !important;
+                            border-color: #079455 !important;
+                            color: #FFFFFF !important;
+                            box-shadow:
+                                0 7px 18px
+                                rgba(18,183,106,.22) !important;
+                        }}
+
+                        .st-key-{clave_boton_guardar} button:hover {{
+                            background: linear-gradient(
+                                135deg,
+                                #0E9F5B 0%,
+                                #067647 100%
+                            ) !important;
+                            border-color: #067647 !important;
+                            color: #FFFFFF !important;
+                        }}
+                        </style>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
                 guardar = st.button(
-                    "Guardar avance",
+                    (
+                        "✓ Avance guardado"
+                        if registro_ya_guardado
+                        else "Guardar avance"
+                    ),
                     type="primary",
-                    use_container_width=True
+                    use_container_width=True,
+                    key=clave_boton_guardar
                 )
 
                 if guardar:
 
-                    if not descripcion_avance.strip():
+                    # ----------------------------------------
+                    # 1. Bloqueo inmediato de segundo clic
+                    # ----------------------------------------
+                    if registro_ya_guardado:
+
+                        st.warning(
+                            "Este registro ya ha sido cargado. "
+                            "Para registrar un nuevo avance, "
+                            "modifique el porcentaje, la descripción, "
+                            "las observaciones, el tipo de evidencia "
+                            "o los archivos adjuntos."
+                        )
+
+                    elif not descripcion_avance.strip():
 
                         st.error(
                             "Debe ingresar una descripción del avance."
@@ -13254,80 +13388,297 @@ else:
 
                         try:
 
-                            evidencias_urls = []
-
-                            if archivos_evidencia:
-
-                                with st.spinner(
-                                    "Comprimiendo y cargando evidencias..."
-                                ):
-
-                                    evidencias_urls = subir_evidencias(
-                                        archivos_evidencia,
-                                        ot_seleccionada["ot"],
-                                        actividad["codigo_actividad"],
-                                        tipo_evidencia
-                                    )
-
-                            payload = {
-                                "actividad_id": actividad["id"],
-                                "avance": avance,
-                                "descripcion_avance": descripcion_avance.strip(),
-                                "observaciones": observaciones.strip(),
-                                "tipo_evidencia": tipo_evidencia,
-                                "critica": critica,
-                                "evidencias": evidencias_urls,
-                                "usuario": usuario["username"]
-                            }
-
-                            (
+                            # --------------------------------
+                            # 2. Protección adicional en BD
+                            # --------------------------------
+                            # Si por latencia o doble clic llega una
+                            # segunda petición casi al mismo tiempo,
+                            # verificamos el último registro de esta
+                            # actividad y usuario antes de subir fotos
+                            # o insertar nuevamente.
+                            ultimo_registro_duplicado = (
                                 supabase
                                 .table("avances_actividad")
-                                .insert(payload)
+                                .select(
+                                    "avance,descripcion_avance,"
+                                    "observaciones,tipo_evidencia,"
+                                    "critica,evidencias,usuario,"
+                                    "fecha_registro"
+                                )
+                                .eq(
+                                    "actividad_id",
+                                    actividad["id"]
+                                )
+                                .eq(
+                                    "usuario",
+                                    usuario["username"]
+                                )
+                                .order(
+                                    "fecha_registro",
+                                    desc=True
+                                )
+                                .limit(1)
                                 .execute()
                             )
 
-                            if evidencias_urls:
+                            datos_ultimo_duplicado = (
+                                ultimo_registro_duplicado.data
+                                or []
+                            )
 
-                                total_original = sum(
-                                    evidencia.get(
-                                        "tamano_original",
-                                        0
-                                    )
-                                    for evidencia in evidencias_urls
+                            duplicado_reciente = False
+
+                            if datos_ultimo_duplicado:
+
+                                ultimo = (
+                                    datos_ultimo_duplicado[0]
                                 )
 
-                                total_comprimido = sum(
-                                    evidencia.get(
-                                        "tamano_comprimido",
-                                        0
-                                    )
-                                    for evidencia in evidencias_urls
+                                fecha_ultimo = pd.to_datetime(
+                                    ultimo.get(
+                                        "fecha_registro"
+                                    ),
+                                    errors="coerce",
+                                    utc=True
                                 )
 
-                                ahorro_total = (
-                                    (
-                                        1
-                                        - total_comprimido
-                                        / total_original
-                                    )
-                                    * 100
-                                    if total_original > 0
-                                    else 0
+                                ahora_utc = pd.Timestamp.now(
+                                    tz="UTC"
                                 )
 
-                                st.success(
-                                    f"Avance registrado correctamente con "
-                                    f"{len(evidencias_urls)} evidencia(s). "
-                                    f"Compresión aproximada: "
-                                    f"{ahorro_total:.0f}%."
+                                dentro_ventana = (
+                                    pd.notna(fecha_ultimo)
+                                    and (
+                                        ahora_utc
+                                        - fecha_ultimo
+                                    )
+                                    <= pd.Timedelta(
+                                        minutes=5
+                                    )
+                                )
+
+                                evidencias_ultimo = (
+                                    ultimo.get(
+                                        "evidencias"
+                                    )
+                                    or []
+                                )
+
+                                nombres_evidencias_ultimo = (
+                                    sorted(
+                                        [
+                                            str(
+                                                evidencia.get(
+                                                    "nombre_original",
+                                                    ""
+                                                )
+                                                or ""
+                                            )
+                                            for evidencia
+                                            in evidencias_ultimo
+                                            if isinstance(
+                                                evidencia,
+                                                dict
+                                            )
+                                        ]
+                                    )
+                                )
+
+                                duplicado_reciente = bool(
+                                    dentro_ventana
+                                    and float(
+                                        ultimo.get(
+                                            "avance",
+                                            0
+                                        )
+                                        or 0
+                                    )
+                                    == float(avance)
+                                    and str(
+                                        ultimo.get(
+                                            "descripcion_avance",
+                                            ""
+                                        )
+                                        or ""
+                                    ).strip()
+                                    == descripcion_avance.strip()
+                                    and str(
+                                        ultimo.get(
+                                            "observaciones",
+                                            ""
+                                        )
+                                        or ""
+                                    ).strip()
+                                    == observaciones.strip()
+                                    and str(
+                                        ultimo.get(
+                                            "tipo_evidencia",
+                                            ""
+                                        )
+                                        or ""
+                                    )
+                                    == str(
+                                        tipo_evidencia
+                                    )
+                                    and bool(
+                                        ultimo.get(
+                                            "critica",
+                                            False
+                                        )
+                                    )
+                                    == bool(critica)
+                                    and (
+                                        nombres_evidencias_ultimo
+                                        == nombres_evidencias_actuales
+                                    )
+                                )
+
+                            if duplicado_reciente:
+
+                                st.session_state[
+                                    clave_huella_guardada
+                                ] = huella_avance_actual
+
+                                st.markdown(
+                                    f"""
+                                    <style>
+                                    .st-key-{clave_boton_guardar} button {{
+                                        background:
+                                            #079455 !important;
+                                        border-color:
+                                            #079455 !important;
+                                        color:
+                                            #FFFFFF !important;
+                                    }}
+                                    </style>
+                                    """,
+                                    unsafe_allow_html=True
+                                )
+
+                                st.warning(
+                                    "Este registro ya ha sido cargado "
+                                    "recientemente. No se generó un "
+                                    "registro duplicado."
                                 )
 
                             else:
 
-                                st.success(
-                                    "Avance registrado correctamente."
+                                evidencias_urls = []
+
+                                if archivos_evidencia:
+
+                                    with st.spinner(
+                                        "Comprimiendo y cargando evidencias..."
+                                    ):
+
+                                        evidencias_urls = subir_evidencias(
+                                            archivos_evidencia,
+                                            ot_seleccionada["ot"],
+                                            actividad["codigo_actividad"],
+                                            tipo_evidencia
+                                        )
+
+                                payload = {
+                                    "actividad_id": actividad["id"],
+                                    "avance": avance,
+                                    "descripcion_avance": descripcion_avance.strip(),
+                                    "observaciones": observaciones.strip(),
+                                    "tipo_evidencia": tipo_evidencia,
+                                    "critica": critica,
+                                    "evidencias": evidencias_urls,
+                                    "usuario": usuario["username"]
+                                }
+
+                                (
+                                    supabase
+                                    .table("avances_actividad")
+                                    .insert(payload)
+                                    .execute()
                                 )
+
+                                # Marcar este contenido como guardado.
+                                # El segundo clic quedará bloqueado.
+                                st.session_state[
+                                    clave_huella_guardada
+                                ] = huella_avance_actual
+
+                                # Cambiar inmediatamente el botón a verde.
+                                st.markdown(
+                                    f"""
+                                    <style>
+                                    .st-key-{clave_boton_guardar} button {{
+                                        background:
+                                            linear-gradient(
+                                                135deg,
+                                                #12B76A 0%,
+                                                #079455 100%
+                                            ) !important;
+                                        border-color:
+                                            #079455 !important;
+                                        color:
+                                            #FFFFFF !important;
+                                        box-shadow:
+                                            0 7px 18px
+                                            rgba(
+                                                18,
+                                                183,
+                                                106,
+                                                .22
+                                            ) !important;
+                                    }}
+                                    </style>
+                                    """,
+                                    unsafe_allow_html=True
+                                )
+
+                                if evidencias_urls:
+
+                                    total_original = sum(
+                                        evidencia.get(
+                                            "tamano_original",
+                                            0
+                                        )
+                                        for evidencia
+                                        in evidencias_urls
+                                    )
+
+                                    total_comprimido = sum(
+                                        evidencia.get(
+                                            "tamano_comprimido",
+                                            0
+                                        )
+                                        for evidencia
+                                        in evidencias_urls
+                                    )
+
+                                    ahorro_total = (
+                                        (
+                                            1
+                                            - total_comprimido
+                                            / total_original
+                                        )
+                                        * 100
+                                        if total_original > 0
+                                        else 0
+                                    )
+
+                                    st.success(
+                                        f"✓ Avance registrado correctamente "
+                                        f"con {len(evidencias_urls)} "
+                                        f"evidencia(s). "
+                                        f"Compresión aproximada: "
+                                        f"{ahorro_total:.0f}%. "
+                                        "El registro quedó protegido "
+                                        "contra doble envío."
+                                    )
+
+                                else:
+
+                                    st.success(
+                                        "✓ Avance registrado correctamente. "
+                                        "El registro quedó protegido "
+                                        "contra doble envío."
+                                    )
 
                         except Exception as exc:
 
