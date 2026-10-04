@@ -12762,31 +12762,158 @@ else:
                     )
                 )
 
-            # OTs permitidas según supervisor
-            if supervisor_seleccionado == "TODOS":
+            # ==================================================
+            # OTs PENDIENTES SEGÚN SUPERVISOR
+            # En Registrar avance se ocultan automáticamente
+            # las OTs que ya llegaron al 100%.
+            #
+            # - Si se selecciona TODOS:
+            #   una OT se retira cuando TODAS sus actividades
+            #   activas están al 100%.
+            #
+            # - Si se selecciona un supervisor:
+            #   una OT se retira cuando TODAS las actividades
+            #   de ESE supervisor dentro de la OT están al 100%.
+            # ==================================================
 
-                ots_filtradas_registro = ots_area
+            ids_actividades_area_registro = [
+                actividad_sup["id"]
+                for actividad_sup in actividades_area_registro
+                if actividad_sup.get("id") is not None
+            ]
 
-            else:
+            avances_area_registro = []
 
-                ids_ot_supervisor = {
-                    actividad_sup["ot_id"]
-                    for actividad_sup
-                    in actividades_area_registro
-                    if str(
-                        actividad_sup.get(
-                            "supervisor",
-                            ""
+            if ids_actividades_area_registro:
+
+                avances_area_registro = (
+                    supabase
+                    .table("avances_actividad")
+                    .select(
+                        "actividad_id,avance,fecha_registro"
+                    )
+                    .in_(
+                        "actividad_id",
+                        ids_actividades_area_registro
+                    )
+                    .execute()
+                ).data or []
+
+            df_avances_area_registro = pd.DataFrame(
+                avances_area_registro
+            )
+
+            mapa_ultimo_avance_registro = {}
+
+            if not df_avances_area_registro.empty:
+
+                ultimos_registro = latest_progress(
+                    df_avances_area_registro
+                )
+
+                if not ultimos_registro.empty:
+
+                    mapa_ultimo_avance_registro = {
+                        fila["actividad_id"]: float(
+                            fila.get("avance", 0) or 0
                         )
-                    ).strip()
-                    == supervisor_seleccionado
-                }
+                        for _, fila
+                        in ultimos_registro.iterrows()
+                    }
 
-                ots_filtradas_registro = [
-                    ot
-                    for ot in ots_area
-                    if ot["id"] in ids_ot_supervisor
+            actividades_relevantes_registro = []
+
+            for actividad_sup in actividades_area_registro:
+
+                supervisor_actividad = str(
+                    actividad_sup.get(
+                        "supervisor",
+                        ""
+                    )
+                    or ""
+                ).strip()
+
+                if (
+                    supervisor_seleccionado != "TODOS"
+                    and supervisor_actividad
+                    != supervisor_seleccionado
+                ):
+                    continue
+
+                actividad_copia = dict(
+                    actividad_sup
+                )
+
+                actividad_copia[
+                    "_avance_real"
+                ] = float(
+                    mapa_ultimo_avance_registro.get(
+                        actividad_sup.get("id"),
+                        0
+                    )
+                    or 0
+                )
+
+                actividades_relevantes_registro.append(
+                    actividad_copia
+                )
+
+            ids_ot_con_actividades = {
+                actividad_sup.get("ot_id")
+                for actividad_sup
+                in actividades_relevantes_registro
+                if actividad_sup.get("ot_id") is not None
+            }
+
+            ids_ot_pendientes = set()
+
+            for ot_id_registro in ids_ot_con_actividades:
+
+                actividades_ot_registro = [
+                    actividad_sup
+                    for actividad_sup
+                    in actividades_relevantes_registro
+                    if actividad_sup.get("ot_id")
+                    == ot_id_registro
                 ]
+
+                # La OT queda disponible si al menos una actividad
+                # del alcance seleccionado todavía está por debajo de 100%.
+                if any(
+                    float(
+                        actividad_sup.get(
+                            "_avance_real",
+                            0
+                        )
+                        or 0
+                    ) < 100
+                    for actividad_sup
+                    in actividades_ot_registro
+                ):
+
+                    ids_ot_pendientes.add(
+                        ot_id_registro
+                    )
+
+            ots_filtradas_registro = [
+                ot
+                for ot in ots_area
+                if ot.get("id") in ids_ot_pendientes
+            ]
+
+            total_ots_alcance_registro = len(
+                {
+                    ot.get("id")
+                    for ot in ots_area
+                    if ot.get("id") in ids_ot_con_actividades
+                }
+            )
+
+            total_ots_completadas_ocultas = max(
+                0,
+                total_ots_alcance_registro
+                - len(ots_filtradas_registro)
+            )
 
             mapa_ots = {
                 (
@@ -12812,21 +12939,26 @@ else:
 
             if supervisor_seleccionado == "TODOS":
                 st.caption(
-                    f"Mostrando todas las OTs disponibles: "
-                    f"{len(ots_filtradas_registro)} OT(s)."
+                    f"OTs pendientes disponibles: "
+                    f"{len(ots_filtradas_registro)} · "
+                    f"OTs al 100% ocultas: "
+                    f"{total_ots_completadas_ocultas}."
                 )
             else:
                 st.caption(
-                    f"Mostrando OTs de "
+                    f"OTs pendientes de "
                     f"{supervisor_seleccionado}: "
-                    f"{len(ots_filtradas_registro)} OT(s)."
+                    f"{len(ots_filtradas_registro)} · "
+                    f"OTs al 100% ocultas: "
+                    f"{total_ots_completadas_ocultas}."
                 )
 
             if not mapa_ots:
 
-                st.warning(
-                    "No existen OTs activas para "
-                    "el supervisor seleccionado."
+                st.success(
+                    "No quedan OTs pendientes para "
+                    "el supervisor seleccionado. "
+                    "Todas las OTs de su alcance están al 100%."
                 )
                 st.stop()
 
