@@ -10981,88 +10981,181 @@ else:
 
             if "ot" in df_estado.columns:
 
-                df_ot = (
-                    df_estado
-                    .groupby(
-                        ["ot", "equipo"],
-                        dropna=False
+                # =========================================
+                # FILTRO DE SUPERVISOR PARA AVANCE POR OT
+                # =========================================
+                if "supervisor" in df_estado.columns:
+
+                    supervisores_ot = sorted(
+                        {
+                            str(valor or "").strip()
+                            for valor in df_estado["supervisor"].tolist()
+                            if str(valor or "").strip()
+                        }
                     )
-                    .apply(
-                        lambda grupo: pd.Series({
-                            "Avance": weighted_progress(
-                                grupo
-                            ),
-                            "Actividades": len(grupo),
-                            "Pendientes": int(
-                                (
-                                    grupo["avance_real"] < 100
-                                ).sum()
+
+                    hay_sin_supervisor_ot = any(
+                        not str(valor or "").strip()
+                        for valor in df_estado["supervisor"].tolist()
+                    )
+
+                    opciones_supervisor_ot = ["TODOS"]
+
+                    opciones_supervisor_ot.extend(
+                        supervisores_ot
+                    )
+
+                    if hay_sin_supervisor_ot:
+                        opciones_supervisor_ot.append(
+                            "SIN SUPERVISOR"
+                        )
+
+                    filtro_supervisor_ot = st.selectbox(
+                        "Filtrar avance por supervisor",
+                        opciones_supervisor_ot,
+                        key="filtro_supervisor_avance_ot",
+                        help=(
+                            "Permite revisar únicamente las OTs y actividades "
+                            "asignadas al supervisor seleccionado."
+                        )
+                    )
+
+                else:
+                    filtro_supervisor_ot = "TODOS"
+
+                df_estado_ot = df_estado.copy()
+
+                if (
+                    "supervisor" in df_estado_ot.columns
+                    and filtro_supervisor_ot != "TODOS"
+                ):
+
+                    supervisor_normalizado = (
+                        df_estado_ot["supervisor"]
+                        .fillna("")
+                        .astype(str)
+                        .str.strip()
+                    )
+
+                    if filtro_supervisor_ot == "SIN SUPERVISOR":
+
+                        df_estado_ot = df_estado_ot[
+                            supervisor_normalizado.eq("")
+                        ].copy()
+
+                    else:
+
+                        df_estado_ot = df_estado_ot[
+                            supervisor_normalizado.eq(
+                                filtro_supervisor_ot
                             )
-                        })
+                        ].copy()
+
+                if df_estado_ot.empty:
+
+                    st.info(
+                        "No existen OTs con actividades para "
+                        "el supervisor seleccionado."
                     )
-                    .reset_index()
-                )
 
-                df_ot["OT / Equipo"] = (
-                    df_ot["ot"].fillna("").astype(str)
-                    + " - "
-                    + df_ot["equipo"].fillna(
-                        "Sin equipo"
-                    ).astype(str)
-                )
+                else:
 
-                df_ot = df_ot.sort_values(
-                    "Avance",
-                    ascending=True
-                )
+                    df_ot = (
+                        df_estado_ot
+                        .groupby(
+                            ["ot", "equipo"],
+                            dropna=False
+                        )
+                        .apply(
+                            lambda grupo: pd.Series({
+                                "Avance": weighted_progress(
+                                    grupo
+                                ),
+                                "Actividades": len(grupo),
+                                "Pendientes": int(
+                                    (
+                                        grupo["avance_real"] < 100
+                                    ).sum()
+                                )
+                            })
+                        )
+                        .reset_index()
+                    )
 
-                fig_ot = px.bar(
-                    df_ot,
-                    x="Avance",
-                    y="OT / Equipo",
-                    orientation="h",
-                    text="Avance",
-                    hover_data=["Actividades", "Pendientes"],
-                    color_discrete_sequence=["#155EEF"]
-                )
+                    df_ot["OT / Equipo"] = (
+                        df_ot["ot"].fillna("").astype(str)
+                        + " - "
+                        + df_ot["equipo"].fillna(
+                            "Sin equipo"
+                        ).astype(str)
+                    )
 
-                fig_ot.update_traces(
-                    texttemplate="%{text:.1f}%",
-                    textposition="outside",
-                    textfont=dict(size=12, color="#0B1F33"),
-                    cliponaxis=False,
-                    marker_line_width=0,
-                    hovertemplate="<b>%{y}</b><br>Avance: %{x:.1f}%<br>Actividades: %{customdata[0]}<br>Pendientes: %{customdata[1]}<extra></extra>"
-                )
+                    df_ot = df_ot.sort_values(
+                        "Avance",
+                        ascending=True
+                    )
 
-                fig_ot.update_layout(
-                    paper_bgcolor="#FFFFFF",
-                    plot_bgcolor="#FFFFFF",
-                    font=dict(color="#1F2937", size=13),
-                    xaxis_title="Avance (%)",
-                    yaxis_title="",
-                    xaxis=dict(
-                        range=[0, 105],
-                        ticksuffix="%",
-                        gridcolor="#E5EAF0",
-                        linecolor="#98A2B3",
-                        tickfont=dict(size=11, color="#344054")
-                    ),
-                    yaxis=dict(
-                        gridcolor="rgba(0,0,0,0)",
-                        linecolor="#D0D5DD",
-                        tickfont=dict(size=11, color="#344054"),
-                        automargin=True
-                    ),
-                    margin=dict(l=20, r=46, t=18, b=30),
-                    height=max(360, len(df_ot) * 42)
-                )
+                    if filtro_supervisor_ot != "TODOS":
+                        st.caption(
+                            f"Supervisor: {filtro_supervisor_ot} · "
+                            f"{len(df_ot)} OT(s) · "
+                            f"{len(df_estado_ot)} actividad(es)"
+                        )
 
-                st.plotly_chart(
-                    fig_ot,
-                    use_container_width=True,
-                    config={"displaylogo": False, "displayModeBar": False, "responsive": True}
-                )
+                    fig_ot = px.bar(
+                        df_ot,
+                        x="Avance",
+                        y="OT / Equipo",
+                        orientation="h",
+                        text="Avance",
+                        hover_data=["Actividades", "Pendientes"],
+                        color_discrete_sequence=["#155EEF"]
+                    )
+
+                    fig_ot.update_traces(
+                        texttemplate="%{text:.1f}%",
+                        textposition="outside",
+                        textfont=dict(size=12, color="#0B1F33"),
+                        cliponaxis=False,
+                        marker_line_width=0,
+                        hovertemplate="<b>%{y}</b><br>Avance: %{x:.1f}%<br>Actividades: %{customdata[0]}<br>Pendientes: %{customdata[1]}<extra></extra>"
+                    )
+
+                    fig_ot.update_layout(
+                        paper_bgcolor="#FFFFFF",
+                        plot_bgcolor="#FFFFFF",
+                        font=dict(color="#1F2937", size=13),
+                        xaxis_title="Avance (%)",
+                        yaxis_title="",
+                        xaxis=dict(
+                            range=[0, 105],
+                            ticksuffix="%",
+                            gridcolor="#E5EAF0",
+                            linecolor="#98A2B3",
+                            tickfont=dict(size=11, color="#344054")
+                        ),
+                        yaxis=dict(
+                            gridcolor="rgba(0,0,0,0)",
+                            linecolor="#D0D5DD",
+                            tickfont=dict(size=11, color="#344054"),
+                            automargin=True
+                        ),
+                        margin=dict(l=20, r=46, t=18, b=30),
+                        height=max(
+                            360,
+                            min(1200, len(df_ot) * 42)
+                        )
+                    )
+
+                    st.plotly_chart(
+                        fig_ot,
+                        use_container_width=True,
+                        config={
+                            "displaylogo": False,
+                            "displayModeBar": False,
+                            "responsive": True
+                        }
+                    )
 
             # =============================================
             # 10. ESTADO DE ACTIVIDADES
