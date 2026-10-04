@@ -18,7 +18,7 @@ from PIL import Image, ImageOps
 from datetime import datetime, timezone, timedelta
 
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER
 from reportlab.platypus import (
@@ -5762,6 +5762,852 @@ def construir_pdf_ejecutivo_area(
 
 
 
+
+# =====================================================
+# REPORTE PDF DE DESEMPEÑO POR SUPERVISOR
+# =====================================================
+
+def lista_supervisores_reporte(
+    actividades: pd.DataFrame
+):
+    """
+    Devuelve los supervisores con nombre válido,
+    ordenados alfabéticamente.
+    """
+    if (
+        actividades is None
+        or actividades.empty
+        or "supervisor" not in actividades.columns
+    ):
+        return []
+
+    return sorted(
+        {
+            str(valor or "").strip()
+            for valor in actividades["supervisor"].tolist()
+            if str(valor or "").strip()
+        }
+    )
+
+
+def filtrar_reporte_supervisor(
+    ots: pd.DataFrame,
+    actividades: pd.DataFrame,
+    avances: pd.DataFrame,
+    supervisor: str
+):
+    """
+    Filtra OTs, actividades y avances para un supervisor.
+    Los KPIs se recalculan exclusivamente con sus actividades.
+    """
+    if actividades is None or actividades.empty:
+        return (
+            pd.DataFrame(),
+            pd.DataFrame(),
+            pd.DataFrame()
+        )
+
+    nombre = str(supervisor or "").strip()
+
+    serie_supervisor = (
+        actividades["supervisor"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        if "supervisor" in actividades.columns
+        else pd.Series(
+            "",
+            index=actividades.index
+        )
+    )
+
+    actividades_sup = actividades[
+        serie_supervisor.eq(nombre)
+    ].copy()
+
+    if actividades_sup.empty:
+        return (
+            pd.DataFrame(),
+            actividades_sup,
+            pd.DataFrame()
+        )
+
+    ids_actividades = (
+        actividades_sup["id"]
+        .dropna()
+        .tolist()
+        if "id" in actividades_sup.columns
+        else []
+    )
+
+    if (
+        avances is not None
+        and not avances.empty
+        and "actividad_id" in avances.columns
+        and ids_actividades
+    ):
+        avances_sup = avances[
+            avances["actividad_id"].isin(
+                ids_actividades
+            )
+        ].copy()
+    else:
+        avances_sup = pd.DataFrame(
+            columns=(
+                avances.columns
+                if avances is not None
+                else []
+            )
+        )
+
+    ids_ot = (
+        actividades_sup["ot_id"]
+        .dropna()
+        .unique()
+        .tolist()
+        if "ot_id" in actividades_sup.columns
+        else []
+    )
+
+    if (
+        ots is not None
+        and not ots.empty
+        and "id" in ots.columns
+        and ids_ot
+    ):
+        ots_sup = ots[
+            ots["id"].isin(ids_ot)
+        ].copy()
+    else:
+        ots_sup = pd.DataFrame(
+            columns=(
+                ots.columns
+                if ots is not None
+                else []
+            )
+        )
+
+    return (
+        ots_sup,
+        actividades_sup,
+        avances_sup
+    )
+
+
+def construir_pdf_supervisor(
+    ots: pd.DataFrame,
+    actividades: pd.DataFrame,
+    avances: pd.DataFrame,
+    nombre_area: str,
+    supervisor: str
+) -> bytes:
+    """
+    Genera un PDF horizontal con:
+    - identificación del supervisor
+    - KPIs recalculados solo con sus actividades
+    - resumen de estado
+    - detalle completo de sus actividades
+    """
+
+    buffer = io.BytesIO()
+
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        rightMargin=24,
+        leftMargin=24,
+        topMargin=24,
+        bottomMargin=24
+    )
+
+    styles = getSampleStyleSheet()
+
+    estilo_titulo = ParagraphStyle(
+        "TituloSupervisor",
+        parent=styles["Title"],
+        fontName="Helvetica-Bold",
+        fontSize=17,
+        leading=20,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor("#082D55"),
+        spaceAfter=5
+    )
+
+    estilo_subtitulo = ParagraphStyle(
+        "SubtituloSupervisor",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=8.5,
+        leading=11,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor("#667085"),
+        spaceAfter=10
+    )
+
+    estilo_h2 = ParagraphStyle(
+        "H2Supervisor",
+        parent=styles["Heading2"],
+        fontName="Helvetica-Bold",
+        fontSize=11,
+        leading=14,
+        textColor=colors.HexColor("#082D55"),
+        spaceBefore=7,
+        spaceAfter=6
+    )
+
+    estilo_tabla = ParagraphStyle(
+        "TablaSupervisor",
+        parent=styles["BodyText"],
+        fontName="Helvetica",
+        fontSize=6.2,
+        leading=7.4,
+        textColor=colors.HexColor("#344054")
+    )
+
+    estilo_tabla_bold = ParagraphStyle(
+        "TablaSupervisorBold",
+        parent=estilo_tabla,
+        fontName="Helvetica-Bold"
+    )
+
+    story = []
+
+    story.append(
+        Paragraph(
+            "PDP CONTROL CENTER QUELLAVECO - MAININ",
+            estilo_titulo
+        )
+    )
+
+    story.append(
+        Paragraph(
+            "Reporte de desempeño por supervisor",
+            estilo_subtitulo
+        )
+    )
+
+    datos_identificacion = [
+        [
+            "Área",
+            str(nombre_area or ""),
+            "Supervisor",
+            str(supervisor or "")
+        ],
+        [
+            "Fecha de emisión",
+            datetime.now().strftime(
+                "%d/%m/%Y %H:%M"
+            ),
+            "Tipo de reporte",
+            "KPIs y actividades"
+        ]
+    ]
+
+    tabla_identificacion = Table(
+        datos_identificacion,
+        colWidths=[
+            82, 270, 92, 270
+        ]
+    )
+
+    tabla_identificacion.setStyle(
+        TableStyle([
+            (
+                "BACKGROUND",
+                (0, 0),
+                (0, -1),
+                colors.HexColor("#EEF4FB")
+            ),
+            (
+                "BACKGROUND",
+                (2, 0),
+                (2, -1),
+                colors.HexColor("#EEF4FB")
+            ),
+            (
+                "FONTNAME",
+                (0, 0),
+                (0, -1),
+                "Helvetica-Bold"
+            ),
+            (
+                "FONTNAME",
+                (2, 0),
+                (2, -1),
+                "Helvetica-Bold"
+            ),
+            (
+                "FONTSIZE",
+                (0, 0),
+                (-1, -1),
+                8
+            ),
+            (
+                "GRID",
+                (0, 0),
+                (-1, -1),
+                0.4,
+                colors.HexColor("#D0D5DD")
+            ),
+            (
+                "VALIGN",
+                (0, 0),
+                (-1, -1),
+                "MIDDLE"
+            ),
+            (
+                "TOPPADDING",
+                (0, 0),
+                (-1, -1),
+                5
+            ),
+            (
+                "BOTTOMPADDING",
+                (0, 0),
+                (-1, -1),
+                5
+            )
+        ])
+    )
+
+    story.append(tabla_identificacion)
+    story.append(Spacer(1, 10))
+
+    kpis = compute_kpis(
+        actividades,
+        avances
+    )
+
+    total_ots = (
+        int(ots["id"].nunique())
+        if (
+            ots is not None
+            and not ots.empty
+            and "id" in ots.columns
+        )
+        else 0
+    )
+
+    plan = float(
+        kpis.get(
+            "avance_plan",
+            0
+        ) or 0
+    )
+
+    real = float(
+        kpis.get(
+            "avance_general",
+            0
+        ) or 0
+    )
+
+    brecha = real - plan
+
+    story.append(
+        Paragraph(
+            "Indicadores del supervisor",
+            estilo_h2
+        )
+    )
+
+    kpi_data = [
+        [
+            "OTs",
+            "Actividades",
+            "Plan actual",
+            "Avance real",
+            "Brecha",
+            "SPI"
+        ],
+        [
+            str(total_ots),
+            str(
+                int(
+                    kpis.get(
+                        "actividades",
+                        0
+                    ) or 0
+                )
+            ),
+            f"{plan:.1f}%",
+            f"{real:.1f}%",
+            f"{brecha:+.1f} pp",
+            f"{float(kpis.get('spi', 0) or 0):.2f}"
+        ],
+        [
+            "Culminadas",
+            "En ejecución",
+            "No iniciadas",
+            "HH plan",
+            "HH ganadas",
+            "Pendientes"
+        ],
+        [
+            str(
+                int(
+                    kpis.get(
+                        "culminadas",
+                        0
+                    ) or 0
+                )
+            ),
+            str(
+                int(
+                    kpis.get(
+                        "parciales",
+                        0
+                    ) or 0
+                )
+            ),
+            str(
+                int(
+                    kpis.get(
+                        "no_iniciadas",
+                        0
+                    ) or 0
+                )
+            ),
+            f"{float(kpis.get('hh_plan', 0) or 0):.0f}",
+            f"{float(kpis.get('hh_ganadas', 0) or 0):.0f}",
+            str(
+                int(
+                    kpis.get(
+                        "pendientes",
+                        0
+                    ) or 0
+                )
+            )
+        ]
+    ]
+
+    tabla_kpis = Table(
+        kpi_data,
+        colWidths=[122] * 6
+    )
+
+    tabla_kpis.setStyle(
+        TableStyle([
+            (
+                "BACKGROUND",
+                (0, 0),
+                (-1, 0),
+                colors.HexColor("#082D55")
+            ),
+            (
+                "BACKGROUND",
+                (0, 2),
+                (-1, 2),
+                colors.HexColor("#EEF4FB")
+            ),
+            (
+                "TEXTCOLOR",
+                (0, 0),
+                (-1, 0),
+                colors.white
+            ),
+            (
+                "TEXTCOLOR",
+                (0, 2),
+                (-1, 2),
+                colors.HexColor("#344054")
+            ),
+            (
+                "FONTNAME",
+                (0, 0),
+                (-1, 0),
+                "Helvetica-Bold"
+            ),
+            (
+                "FONTNAME",
+                (0, 2),
+                (-1, 2),
+                "Helvetica-Bold"
+            ),
+            (
+                "FONTNAME",
+                (0, 1),
+                (-1, 1),
+                "Helvetica-Bold"
+            ),
+            (
+                "FONTNAME",
+                (0, 3),
+                (-1, 3),
+                "Helvetica-Bold"
+            ),
+            (
+                "ALIGN",
+                (0, 0),
+                (-1, -1),
+                "CENTER"
+            ),
+            (
+                "FONTSIZE",
+                (0, 0),
+                (-1, -1),
+                8
+            ),
+            (
+                "GRID",
+                (0, 0),
+                (-1, -1),
+                0.4,
+                colors.HexColor("#D0D5DD")
+            ),
+            (
+                "TOPPADDING",
+                (0, 0),
+                (-1, -1),
+                6
+            ),
+            (
+                "BOTTOMPADDING",
+                (0, 0),
+                (-1, -1),
+                6
+            )
+        ])
+    )
+
+    story.append(tabla_kpis)
+    story.append(Spacer(1, 10))
+
+    estado = calcular_semaforo_pdf(
+        actividades,
+        avances
+    )
+
+    if (
+        not estado.empty
+        and ots is not None
+        and not ots.empty
+        and "ot_id" in estado.columns
+    ):
+        datos_ot = (
+            ots[
+                [
+                    "id",
+                    "ot",
+                    "equipo"
+                ]
+            ]
+            .rename(
+                columns={
+                    "id": "ot_id"
+                }
+            )
+        )
+
+        estado = estado.merge(
+            datos_ot,
+            on="ot_id",
+            how="left"
+        )
+
+    story.append(
+        Paragraph(
+            "Detalle de actividades",
+            estilo_h2
+        )
+    )
+
+    if estado.empty:
+
+        story.append(
+            Paragraph(
+                "No existen actividades para el supervisor seleccionado.",
+                styles["BodyText"]
+            )
+        )
+
+    else:
+
+        estado = estado.copy()
+
+        estado["_REAL"] = pd.to_numeric(
+            estado.get(
+                "avance_real",
+                0
+            ),
+            errors="coerce"
+        ).fillna(0)
+
+        estado["_PLAN"] = pd.to_numeric(
+            estado.get(
+                "PLAN ACTUAL (%)",
+                0
+            ),
+            errors="coerce"
+        ).fillna(0)
+
+        estado = estado.sort_values(
+            [
+                "_PRIORIDAD",
+                "_REAL",
+                "codigo_actividad"
+            ],
+            ascending=[
+                True,
+                True,
+                True
+            ]
+        )
+
+        detalle_data = [
+            [
+                "OT",
+                "Equipo",
+                "Actividad",
+                "Descripción",
+                "Plan",
+                "Real",
+                "Brecha",
+                "Estado",
+                "Inicio",
+                "Fin"
+            ]
+        ]
+
+        for _, fila in estado.iterrows():
+
+            inicio = pd.to_datetime(
+                fila.get(
+                    "inicio_plan"
+                ),
+                errors="coerce"
+            )
+
+            fin = pd.to_datetime(
+                fila.get(
+                    "fin_plan"
+                ),
+                errors="coerce"
+            )
+
+            descripcion = (
+                fila.get(
+                    "descripcion_trabajo"
+                )
+                or fila.get(
+                    "descripcion"
+                )
+                or ""
+            )
+
+            detalle_data.append([
+                Paragraph(
+                    str(
+                        fila.get(
+                            "ot",
+                            ""
+                        )
+                        or ""
+                    ),
+                    estilo_tabla_bold
+                ),
+                Paragraph(
+                    str(
+                        fila.get(
+                            "equipo",
+                            ""
+                        )
+                        or ""
+                    ),
+                    estilo_tabla
+                ),
+                Paragraph(
+                    str(
+                        fila.get(
+                            "codigo_actividad",
+                            ""
+                        )
+                        or ""
+                    ),
+                    estilo_tabla
+                ),
+                Paragraph(
+                    str(
+                        descripcion
+                    )[:260],
+                    estilo_tabla
+                ),
+                f"{float(fila.get('PLAN ACTUAL (%)', 0) or 0):.1f}%",
+                f"{float(fila.get('avance_real', 0) or 0):.1f}%",
+                f"{float(fila.get('DESVIACIÓN (pp)', 0) or 0):+.1f}",
+                Paragraph(
+                    str(
+                        fila.get(
+                            "ALERTA",
+                            ""
+                        )
+                        or ""
+                    ),
+                    estilo_tabla
+                ),
+                (
+                    inicio.strftime(
+                        "%d/%m %H:%M"
+                    )
+                    if pd.notna(inicio)
+                    else ""
+                ),
+                (
+                    fin.strftime(
+                        "%d/%m %H:%M"
+                    )
+                    if pd.notna(fin)
+                    else ""
+                )
+            ])
+
+        tabla_detalle = Table(
+            detalle_data,
+            colWidths=[
+                58,
+                68,
+                70,
+                190,
+                42,
+                42,
+                42,
+                78,
+                65,
+                65
+            ],
+            repeatRows=1
+        )
+
+        estilo_detalle = [
+            (
+                "BACKGROUND",
+                (0, 0),
+                (-1, 0),
+                colors.HexColor("#082D55")
+            ),
+            (
+                "TEXTCOLOR",
+                (0, 0),
+                (-1, 0),
+                colors.white
+            ),
+            (
+                "FONTNAME",
+                (0, 0),
+                (-1, 0),
+                "Helvetica-Bold"
+            ),
+            (
+                "FONTSIZE",
+                (0, 0),
+                (-1, -1),
+                6.2
+            ),
+            (
+                "GRID",
+                (0, 0),
+                (-1, -1),
+                0.35,
+                colors.HexColor("#D0D5DD")
+            ),
+            (
+                "VALIGN",
+                (0, 0),
+                (-1, -1),
+                "TOP"
+            ),
+            (
+                "ALIGN",
+                (4, 1),
+                (6, -1),
+                "CENTER"
+            ),
+            (
+                "ALIGN",
+                (8, 1),
+                (9, -1),
+                "CENTER"
+            ),
+            (
+                "ROWBACKGROUNDS",
+                (0, 1),
+                (-1, -1),
+                [
+                    colors.white,
+                    colors.HexColor("#F8FAFC")
+                ]
+            ),
+            (
+                "TOPPADDING",
+                (0, 0),
+                (-1, -1),
+                3.5
+            ),
+            (
+                "BOTTOMPADDING",
+                (0, 0),
+                (-1, -1),
+                3.5
+            )
+        ]
+
+        # Semáforo visual en la columna Estado.
+        for indice_fila, (_, fila) in enumerate(
+            estado.iterrows(),
+            start=1
+        ):
+
+            nivel = str(
+                fila.get(
+                    "NIVEL",
+                    ""
+                )
+                or ""
+            ).upper()
+
+            mapa_color = {
+                "VERDE": "#E7F8EF",
+                "AMARILLO": "#FFF7D6",
+                "NARANJA": "#FFF0E0",
+                "ROJO": "#FDE8E7"
+            }
+
+            if nivel in mapa_color:
+                estilo_detalle.append(
+                    (
+                        "BACKGROUND",
+                        (7, indice_fila),
+                        (7, indice_fila),
+                        colors.HexColor(
+                            mapa_color[nivel]
+                        )
+                    )
+                )
+
+        tabla_detalle.setStyle(
+            TableStyle(
+                estilo_detalle
+            )
+        )
+
+        story.append(tabla_detalle)
+
+    story.append(Spacer(1, 12))
+
+    story.append(
+        Paragraph(
+            "MAININ - PDP Control Center Quellaveco",
+            estilo_subtitulo
+        )
+    )
+
+    doc.build(story)
+
+    buffer.seek(0)
+
+    return buffer.getvalue()
+
+
 # =====================================================
 # PREPARAR DATAFRAME PARA EXCEL
 # =====================================================
@@ -10632,6 +11478,232 @@ if rol == "admin":
 
                     st.divider()
 
+                    # =====================================
+                    # REPORTE POR SUPERVISOR - ADMIN
+                    # =====================================
+                    st.markdown(
+                        "### Reporte por supervisor"
+                    )
+
+                    st.caption(
+                        "Seleccione un supervisor de la vista "
+                        "actual para revisar sus KPIs, actividades "
+                        "y generar un PDF individual."
+                    )
+
+                    supervisores_admin_reporte = (
+                        lista_supervisores_reporte(
+                            df_actividades_reporte_admin
+                        )
+                    )
+
+                    if not supervisores_admin_reporte:
+
+                        st.info(
+                            "No existen supervisores asignados "
+                            "para la vista seleccionada."
+                        )
+
+                    else:
+
+                        supervisor_admin_reporte = (
+                            st.selectbox(
+                                "Seleccionar supervisor",
+                                supervisores_admin_reporte,
+                                key=(
+                                    "selector_supervisor_"
+                                    "reporte_admin"
+                                )
+                            )
+                        )
+
+                        (
+                            df_ots_sup_admin,
+                            df_act_sup_admin,
+                            df_av_sup_admin
+                        ) = filtrar_reporte_supervisor(
+                            df_ots_reporte_admin,
+                            df_actividades_reporte_admin,
+                            df_avances_reporte_admin,
+                            supervisor_admin_reporte
+                        )
+
+                        kpis_sup_admin = compute_kpis(
+                            df_act_sup_admin,
+                            df_av_sup_admin
+                        )
+
+                        plan_sup_admin = float(
+                            kpis_sup_admin.get(
+                                "avance_plan",
+                                0
+                            ) or 0
+                        )
+
+                        real_sup_admin = float(
+                            kpis_sup_admin.get(
+                                "avance_general",
+                                0
+                            ) or 0
+                        )
+
+                        brecha_sup_admin = (
+                            real_sup_admin
+                            - plan_sup_admin
+                        )
+
+                        as1, as2, as3, as4 = (
+                            st.columns(4)
+                        )
+
+                        with as1:
+                            st.metric(
+                                "OTs",
+                                len(
+                                    df_ots_sup_admin
+                                )
+                            )
+
+                        with as2:
+                            st.metric(
+                                "Actividades",
+                                int(
+                                    kpis_sup_admin.get(
+                                        "actividades",
+                                        0
+                                    ) or 0
+                                )
+                            )
+
+                        with as3:
+                            st.metric(
+                                "Avance real",
+                                f"{real_sup_admin:.1f}%",
+                                delta=(
+                                    f"{brecha_sup_admin:+.1f} pp"
+                                )
+                            )
+
+                        with as4:
+                            st.metric(
+                                "SPI",
+                                f"{float(kpis_sup_admin.get('spi', 0) or 0):.2f}"
+                            )
+
+                        estado_sup_admin = (
+                            calcular_semaforo_pdf(
+                                df_act_sup_admin,
+                                df_av_sup_admin
+                            )
+                        )
+
+                        if (
+                            not estado_sup_admin.empty
+                            and not df_ots_sup_admin.empty
+                        ):
+
+                            estado_sup_admin = (
+                                estado_sup_admin
+                                .merge(
+                                    df_ots_sup_admin[
+                                        [
+                                            "id",
+                                            "ot",
+                                            "equipo"
+                                        ]
+                                    ].rename(
+                                        columns={
+                                            "id": "ot_id"
+                                        }
+                                    ),
+                                    on="ot_id",
+                                    how="left"
+                                )
+                            )
+
+                            vista_sup_admin = (
+                                estado_sup_admin[
+                                    [
+                                        "ot",
+                                        "equipo",
+                                        "codigo_actividad",
+                                        "descripcion",
+                                        "PLAN ACTUAL (%)",
+                                        "avance_real",
+                                        "DESVIACIÓN (pp)",
+                                        "ALERTA"
+                                    ]
+                                ]
+                                .rename(
+                                    columns={
+                                        "ot": "OT",
+                                        "equipo": "EQUIPO",
+                                        "codigo_actividad": "ACTIVIDAD",
+                                        "descripcion": "DESCRIPCIÓN",
+                                        "PLAN ACTUAL (%)": "PLAN (%)",
+                                        "avance_real": "REAL (%)",
+                                        "DESVIACIÓN (pp)": "BRECHA (pp)",
+                                        "ALERTA": "ESTADO"
+                                    }
+                                )
+                            )
+
+                            st.dataframe(
+                                vista_sup_admin,
+                                use_container_width=True,
+                                hide_index=True,
+                                height=340
+                            )
+
+                        try:
+
+                            pdf_sup_admin = (
+                                construir_pdf_supervisor(
+                                    df_ots_sup_admin,
+                                    df_act_sup_admin,
+                                    df_av_sup_admin,
+                                    nombre_reporte_admin,
+                                    supervisor_admin_reporte
+                                )
+                            )
+
+                            archivo_sup_admin = (
+                                str(
+                                    supervisor_admin_reporte
+                                )
+                                .strip()
+                                .lower()
+                                .replace(
+                                    " ",
+                                    "_"
+                                )
+                            )
+
+                            st.download_button(
+                                "Descargar PDF del supervisor",
+                                data=pdf_sup_admin,
+                                file_name=(
+                                    "PDP_Quellaveco_"
+                                    f"{str(codigo_reporte_admin).lower()}_"
+                                    f"{archivo_sup_admin}_"
+                                    f"{datetime.now():%Y%m%d_%H%M}.pdf"
+                                ),
+                                mime="application/pdf",
+                                type="primary",
+                                use_container_width=True,
+                                key="descarga_pdf_supervisor_admin"
+                            )
+
+                        except Exception as exc:
+
+                            st.error(
+                                "No fue posible generar el "
+                                "PDF del supervisor: "
+                                f"{exc}"
+                            )
+
+                    st.divider()
+
                     st.markdown(
                         "### Informe ejecutivo para gerencia"
                     )
@@ -13823,6 +14895,270 @@ else:
                         "SPI",
                         f"{kpis_reporte['spi']:.2f}"
                     )
+
+                st.divider()
+
+                # =========================================
+                # REPORTE POR SUPERVISOR
+                # =========================================
+                st.subheader(
+                    "Reporte por supervisor"
+                )
+
+                st.caption(
+                    "Seleccione un supervisor para revisar sus "
+                    "KPIs, sus actividades y exportar un PDF "
+                    "individual de desempeño."
+                )
+
+                supervisores_reporte = (
+                    lista_supervisores_reporte(
+                        df_actividades_reporte
+                    )
+                )
+
+                if not supervisores_reporte:
+
+                    st.info(
+                        "No existen supervisores asignados "
+                        "en las actividades de esta área."
+                    )
+
+                else:
+
+                    supervisor_reporte = st.selectbox(
+                        "Seleccionar supervisor",
+                        supervisores_reporte,
+                        key="selector_supervisor_reporte_planner"
+                    )
+
+                    (
+                        df_ots_supervisor,
+                        df_actividades_supervisor,
+                        df_avances_supervisor
+                    ) = filtrar_reporte_supervisor(
+                        df_ots_reporte,
+                        df_actividades_reporte,
+                        df_avances_reporte,
+                        supervisor_reporte
+                    )
+
+                    kpis_supervisor = compute_kpis(
+                        df_actividades_supervisor,
+                        df_avances_supervisor
+                    )
+
+                    plan_supervisor = float(
+                        kpis_supervisor.get(
+                            "avance_plan",
+                            0
+                        ) or 0
+                    )
+
+                    real_supervisor = float(
+                        kpis_supervisor.get(
+                            "avance_general",
+                            0
+                        ) or 0
+                    )
+
+                    brecha_supervisor = (
+                        real_supervisor
+                        - plan_supervisor
+                    )
+
+                    sr1, sr2, sr3, sr4 = st.columns(4)
+
+                    with sr1:
+                        st.metric(
+                            "OTs",
+                            len(
+                                df_ots_supervisor
+                            )
+                        )
+
+                    with sr2:
+                        st.metric(
+                            "Actividades",
+                            int(
+                                kpis_supervisor.get(
+                                    "actividades",
+                                    0
+                                ) or 0
+                            )
+                        )
+
+                    with sr3:
+                        st.metric(
+                            "Avance real",
+                            f"{real_supervisor:.1f}%",
+                            delta=(
+                                f"{brecha_supervisor:+.1f} pp"
+                            )
+                        )
+
+                    with sr4:
+                        st.metric(
+                            "SPI",
+                            f"{float(kpis_supervisor.get('spi', 0) or 0):.2f}"
+                        )
+
+                    sr5, sr6, sr7, sr8 = st.columns(4)
+
+                    with sr5:
+                        st.metric(
+                            "Culminadas",
+                            int(
+                                kpis_supervisor.get(
+                                    "culminadas",
+                                    0
+                                ) or 0
+                            )
+                        )
+
+                    with sr6:
+                        st.metric(
+                            "En ejecución",
+                            int(
+                                kpis_supervisor.get(
+                                    "parciales",
+                                    0
+                                ) or 0
+                            )
+                        )
+
+                    with sr7:
+                        st.metric(
+                            "No iniciadas",
+                            int(
+                                kpis_supervisor.get(
+                                    "no_iniciadas",
+                                    0
+                                ) or 0
+                            )
+                        )
+
+                    with sr8:
+                        st.metric(
+                            "HH plan / ganadas",
+                            (
+                                f"{float(kpis_supervisor.get('hh_plan', 0) or 0):.0f}"
+                                " / "
+                                f"{float(kpis_supervisor.get('hh_ganadas', 0) or 0):.0f}"
+                            )
+                        )
+
+                    estado_supervisor = (
+                        calcular_semaforo_pdf(
+                            df_actividades_supervisor,
+                            df_avances_supervisor
+                        )
+                    )
+
+                    if (
+                        not estado_supervisor.empty
+                        and not df_ots_supervisor.empty
+                    ):
+
+                        estado_supervisor = (
+                            estado_supervisor
+                            .merge(
+                                df_ots_supervisor[
+                                    [
+                                        "id",
+                                        "ot",
+                                        "equipo"
+                                    ]
+                                ].rename(
+                                    columns={
+                                        "id": "ot_id"
+                                    }
+                                ),
+                                on="ot_id",
+                                how="left"
+                            )
+                        )
+
+                        tabla_supervisor = (
+                            estado_supervisor[
+                                [
+                                    "ot",
+                                    "equipo",
+                                    "codigo_actividad",
+                                    "descripcion",
+                                    "PLAN ACTUAL (%)",
+                                    "avance_real",
+                                    "DESVIACIÓN (pp)",
+                                    "ALERTA"
+                                ]
+                            ]
+                            .rename(
+                                columns={
+                                    "ot": "OT",
+                                    "equipo": "EQUIPO",
+                                    "codigo_actividad": "ACTIVIDAD",
+                                    "descripcion": "DESCRIPCIÓN",
+                                    "PLAN ACTUAL (%)": "PLAN (%)",
+                                    "avance_real": "REAL (%)",
+                                    "DESVIACIÓN (pp)": "BRECHA (pp)",
+                                    "ALERTA": "ESTADO"
+                                }
+                            )
+                        )
+
+                        st.dataframe(
+                            tabla_supervisor,
+                            use_container_width=True,
+                            hide_index=True,
+                            height=360
+                        )
+
+                    try:
+
+                        pdf_supervisor = (
+                            construir_pdf_supervisor(
+                                df_ots_supervisor,
+                                df_actividades_supervisor,
+                                df_avances_supervisor,
+                                nombre_area,
+                                supervisor_reporte
+                            )
+                        )
+
+                        nombre_archivo_supervisor = (
+                            str(
+                                supervisor_reporte
+                            )
+                            .strip()
+                            .lower()
+                            .replace(
+                                " ",
+                                "_"
+                            )
+                        )
+
+                        st.download_button(
+                            "Descargar PDF del supervisor",
+                            data=pdf_supervisor,
+                            file_name=(
+                                "PDP_Quellaveco_"
+                                f"{codigo_area.lower()}_"
+                                f"{nombre_archivo_supervisor}_"
+                                f"{datetime.now():%Y%m%d_%H%M}.pdf"
+                            ),
+                            mime="application/pdf",
+                            type="primary",
+                            use_container_width=True,
+                            key="descarga_pdf_supervisor_planner"
+                        )
+
+                    except Exception as exc:
+
+                        st.error(
+                            "No fue posible generar el "
+                            "PDF del supervisor: "
+                            f"{exc}"
+                        )
 
                 st.divider()
 
