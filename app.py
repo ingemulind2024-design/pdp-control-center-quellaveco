@@ -7,6 +7,8 @@ from pathlib import Path
 import uuid
 import unicodedata
 import html
+import tempfile
+import gc
 
 import streamlit as st
 import pandas as pd
@@ -10105,8 +10107,9 @@ def mostrar_reportes_fotograficos_adicionales(
         )
 
     st.info(
-        "El informe general puede demorar algunos segundos "
-        "si contiene muchas fotografías."
+        "El informe general procesa las fotografías en modo "
+        "optimizado para evitar sobrecargar la memoria de Streamlit. "
+        "Si contiene muchas evidencias puede tomar algunos segundos."
     )
 
     key_general_pdf = (
@@ -10779,9 +10782,109 @@ def _evidencias_por_etapa(
     return resultado
 
 
+
+def _preparar_imagen_pdf_temporal(
+    evidencia,
+    directorio_temporal,
+    indice_foto,
+    ancho_max=158,
+    alto_max=145
+):
+    """
+    Versión estable para compilados grandes.
+
+    La foto se descarga, corrige orientación, reduce resolución
+    y se guarda temporalmente en disco. ReportLab recibe la ruta
+    del archivo y no mantiene todos los BytesIO simultáneamente
+    en memoria.
+    """
+    contenido = descargar_evidencia_pdf(
+        evidencia
+    )
+
+    if not contenido:
+        return None
+
+    try:
+
+        with Image.open(
+            io.BytesIO(contenido)
+        ) as imagen_original:
+
+            imagen = ImageOps.exif_transpose(
+                imagen_original
+            )
+
+            if imagen.mode != "RGB":
+                imagen = imagen.convert(
+                    "RGB"
+                )
+            else:
+                imagen = imagen.copy()
+
+        # La evidencia se mostrará pequeña dentro de A4.
+        # No tiene sentido conservar resolución fotográfica completa.
+        imagen.thumbnail(
+            (900, 900),
+            Image.Resampling.LANCZOS
+        )
+
+        ancho_original, alto_original = (
+            imagen.size
+        )
+
+        if (
+            ancho_original <= 0
+            or alto_original <= 0
+        ):
+            return None
+
+        escala = min(
+            ancho_max / ancho_original,
+            alto_max / alto_original,
+            1.0
+        )
+
+        ancho_pdf = max(
+            1,
+            ancho_original * escala
+        )
+
+        alto_pdf = max(
+            1,
+            alto_original * escala
+        )
+
+        ruta_imagen = Path(
+            directorio_temporal
+        ) / (
+            f"evidencia_{indice_foto}.jpg"
+        )
+
+        imagen.save(
+            ruta_imagen,
+            format="JPEG",
+            quality=68,
+            optimize=True
+        )
+
+        imagen.close()
+
+        return RLImage(
+            str(ruta_imagen),
+            width=ancho_pdf,
+            height=alto_pdf
+        )
+
+    except Exception:
+        return None
+
+
 def _tabla_evidencias_antapaccay(
     avances_ot: pd.DataFrame,
-    estilo_vacio
+    estilo_vacio,
+    directorio_temporal=None,
+    prefijo_foto="ot"
 ):
     """
     Construye una matriz:
@@ -10821,13 +10924,34 @@ def _tabla_evidencias_antapaccay(
 
             if indice < len(lista):
 
-                imagen = (
-                    preparar_imagen_pdf(
-                        lista[indice],
-                        ancho_max=158,
-                        alto_max=145
-                    )
+                identificador_foto = (
+                    f"{prefijo_foto}_"
+                    f"{indice}_"
+                    f"{len(filas)}_"
+                    f"{len(fila_imagenes)}"
                 )
+
+                if directorio_temporal:
+
+                    imagen = (
+                        _preparar_imagen_pdf_temporal(
+                            lista[indice],
+                            directorio_temporal,
+                            identificador_foto,
+                            ancho_max=158,
+                            alto_max=145
+                        )
+                    )
+
+                else:
+
+                    imagen = (
+                        preparar_imagen_pdf(
+                            lista[indice],
+                            ancho_max=158,
+                            alto_max=145
+                        )
+                    )
 
                 if imagen is not None:
 
@@ -11009,7 +11133,8 @@ def _agregar_ot_formato_antapaccay(
     nombre_area: str,
     numero_ot: int,
     total_ots: int,
-    supervisor_filtro: str = ""
+    supervisor_filtro: str = "",
+    directorio_temporal=None
 ):
     """
     Agrega una OT completa al story:
@@ -11627,7 +11752,11 @@ def _agregar_ot_formato_antapaccay(
     story.append(
         _tabla_evidencias_antapaccay(
             avances_ot,
-            estilo_vacio
+            estilo_vacio,
+            directorio_temporal=directorio_temporal,
+            prefijo_foto=(
+                f"ot_{numero_ot}"
+            )
         )
     )
 
@@ -11681,10 +11810,17 @@ def construir_pdf_formato_antapaccay(
     o todas las OTs de un supervisor.
     """
 
-    buffer = io.BytesIO()
+    # El compilado puede contener cientos de fotografías.
+    # Se construye en disco temporal para reducir consumo de RAM.
+    directorio_trabajo = tempfile.TemporaryDirectory()
+
+    ruta_pdf_temporal = (
+        Path(directorio_trabajo.name)
+        / "informe_antapaccay.pdf"
+    )
 
     doc = SimpleDocTemplate(
-        buffer,
+        str(ruta_pdf_temporal),
         pagesize=A4,
         rightMargin=35,
         leftMargin=35,
@@ -11735,11 +11871,14 @@ def construir_pdf_formato_antapaccay(
             story
         )
 
-        buffer.seek(
-            0
+        pdf_bytes = (
+            ruta_pdf_temporal
+            .read_bytes()
         )
 
-        return buffer.getvalue()
+        directorio_trabajo.cleanup()
+
+        return pdf_bytes
 
     df_ots_ordenadas = (
         df_ots.copy()
@@ -12039,8 +12178,15 @@ def construir_pdf_formato_antapaccay(
             nombre_area,
             numero_ot,
             total_ots,
-            supervisor
+            supervisor,
+            directorio_temporal=(
+                directorio_trabajo.name
+            )
         )
+
+        # Liberación preventiva de objetos intermedios
+        # durante compilados con muchas OTs.
+        gc.collect()
 
         if numero_ot < total_ots:
             story.append(
@@ -12051,11 +12197,16 @@ def construir_pdf_formato_antapaccay(
         story
     )
 
-    buffer.seek(
-        0
+    pdf_bytes = (
+        ruta_pdf_temporal
+        .read_bytes()
     )
 
-    return buffer.getvalue()
+    directorio_trabajo.cleanup()
+
+    gc.collect()
+
+    return pdf_bytes
 
 
 # =====================================================
