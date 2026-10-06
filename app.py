@@ -11302,95 +11302,92 @@ def _agregar_ot_formato_antapaccay(
         )
     )
 
-    contenido_detalle = [
+    # ========================================================
+    # DETALLE EJECUTADO
+    # ========================================================
+    # IMPORTANTE:
+    # No colocar todos los Paragraph dentro de UNA sola celda
+    # de Table. Cuando una OT tiene muchos registros, ReportLab
+    # convierte esa celda en una fila indivisible y puede superar
+    # la altura de una página ("Flowable too large").
+    #
+    # En su lugar, cada línea se agrega como Flowable independiente,
+    # permitiendo que ReportLab haga salto de página automáticamente.
+
+    estilo_detalle_titulo = ParagraphStyle(
+        f"DET_TIT_OT_{numero_ot}",
+        parent=estilo_valor,
+        fontName="Helvetica-Bold",
+        fontSize=8,
+        leading=10,
+        leftIndent=7,
+        rightIndent=7,
+        spaceBefore=5,
+        spaceAfter=4,
+        borderWidth=0.5,
+        borderColor=colors.black,
+        borderPadding=(5, 6, 4, 6)
+    )
+
+    estilo_detalle_linea = ParagraphStyle(
+        f"DET_LIN_OT_{numero_ot}",
+        parent=estilo_detalle,
+        fontName="Helvetica",
+        fontSize=7.8,
+        leading=10,
+        leftIndent=14,
+        rightIndent=7,
+        firstLineIndent=-7,
+        spaceBefore=0,
+        spaceAfter=3
+    )
+
+    story.append(
         Paragraph(
             "<b>DETALLE:</b>",
-            estilo_valor
+            estilo_detalle_titulo
         )
-    ]
+    )
 
     if detalles:
 
         for detalle in detalles:
 
-            contenido_detalle.append(
+            # Limitar únicamente caracteres de control; el texto
+            # completo sigue disponible y puede dividirse entre páginas.
+            detalle_limpio = str(
+                detalle
+                or ""
+            ).strip()
+
+            if not detalle_limpio:
+                continue
+
+            story.append(
                 Paragraph(
                     (
                         "• "
                         + _texto_pdf(
-                            detalle
+                            detalle_limpio
                         )
                     ),
-                    estilo_detalle
+                    estilo_detalle_linea
                 )
             )
 
     else:
 
-        contenido_detalle.append(
+        story.append(
             Paragraph(
                 "• Sin descripción de ejecución registrada.",
-                estilo_detalle
+                estilo_detalle_linea
             )
         )
-
-    caja_detalle = Table(
-        [[contenido_detalle]],
-        colWidths=[
-            524
-        ]
-    )
-
-    caja_detalle.setStyle(
-        TableStyle([
-            (
-                "BOX",
-                (0, 0),
-                (-1, -1),
-                0.5,
-                colors.black
-            ),
-            (
-                "LEFTPADDING",
-                (0, 0),
-                (-1, -1),
-                7
-            ),
-            (
-                "RIGHTPADDING",
-                (0, 0),
-                (-1, -1),
-                7
-            ),
-            (
-                "TOPPADDING",
-                (0, 0),
-                (-1, -1),
-                6
-            ),
-            (
-                "BOTTOMPADDING",
-                (0, 0),
-                (-1, -1),
-                8
-            ),
-            (
-                "VALIGN",
-                (0, 0),
-                (-1, -1),
-                "TOP"
-            )
-        ])
-    )
-
-    story.append(
-        caja_detalle
-    )
 
     story.append(
         Spacer(
             1,
-            13
+            10
         )
     )
 
