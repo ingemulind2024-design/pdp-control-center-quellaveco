@@ -27,7 +27,9 @@ from reportlab.platypus import (
     Spacer,
     Table,
     TableStyle,
-    PageBreak
+    PageBreak,
+    Image as RLImage,
+    KeepTogether
 )
 from reportlab.graphics.shapes import (
     Drawing,
@@ -7090,6 +7092,1644 @@ def construir_pdf_supervisor(
     return buffer.getvalue()
 
 
+
+# =====================================================
+# INFORME FOTOGRÁFICO POR OT
+# =====================================================
+
+def descargar_evidencia_pdf(evidencia):
+    """
+    Descarga desde Supabase Storage los bytes de una evidencia
+    para incorporarla al PDF. El bucket permanece privado.
+    """
+    path = extraer_path_evidencia(
+        evidencia
+    )
+
+    if not path:
+        return None
+
+    try:
+        respuesta = (
+            supabase_admin
+            .storage
+            .from_(BUCKET_EVIDENCIAS)
+            .download(path)
+        )
+
+        if isinstance(
+            respuesta,
+            (bytes, bytearray)
+        ):
+            return bytes(respuesta)
+
+        contenido = getattr(
+            respuesta,
+            "content",
+            None
+        )
+
+        if isinstance(
+            contenido,
+            (bytes, bytearray)
+        ):
+            return bytes(contenido)
+
+        return None
+
+    except Exception:
+        return None
+
+
+def preparar_imagen_pdf(
+    evidencia,
+    ancho_max=205,
+    alto_max=138
+):
+    """
+    Convierte la evidencia a JPEG y devuelve un RLImage
+    manteniendo la proporción y orientación de celular.
+    """
+    contenido = descargar_evidencia_pdf(
+        evidencia
+    )
+
+    if not contenido:
+        return None
+
+    try:
+        imagen = Image.open(
+            io.BytesIO(contenido)
+        )
+
+        imagen = ImageOps.exif_transpose(
+            imagen
+        )
+
+        if imagen.mode != "RGB":
+            imagen = imagen.convert(
+                "RGB"
+            )
+
+        ancho_original, alto_original = (
+            imagen.size
+        )
+
+        if (
+            ancho_original <= 0
+            or alto_original <= 0
+        ):
+            return None
+
+        escala = min(
+            ancho_max / ancho_original,
+            alto_max / alto_original,
+            1.0
+        )
+
+        ancho_pdf = max(
+            1,
+            ancho_original * escala
+        )
+
+        alto_pdf = max(
+            1,
+            alto_original * escala
+        )
+
+        buffer_imagen = io.BytesIO()
+
+        imagen.save(
+            buffer_imagen,
+            format="JPEG",
+            quality=82,
+            optimize=True
+        )
+
+        buffer_imagen.seek(0)
+
+        return RLImage(
+            buffer_imagen,
+            width=ancho_pdf,
+            height=alto_pdf
+        )
+
+    except Exception:
+        return None
+
+
+def contar_fotos_por_etapa(
+    avances_ot: pd.DataFrame
+):
+    conteo = {
+        "INICIO": 0,
+        "DURANTE": 0,
+        "FINAL": 0
+    }
+
+    if (
+        avances_ot is None
+        or avances_ot.empty
+    ):
+        return conteo
+
+    for _, registro in (
+        avances_ot.iterrows()
+    ):
+
+        etapa = str(
+            registro.get(
+                "tipo_evidencia",
+                ""
+            )
+            or ""
+        ).strip().upper()
+
+        if etapa not in conteo:
+            continue
+
+        evidencias = (
+            registro.get(
+                "evidencias"
+            )
+            or []
+        )
+
+        if isinstance(
+            evidencias,
+            (list, tuple)
+        ):
+            conteo[etapa] += len(
+                evidencias
+            )
+
+    return conteo
+
+
+def construir_fotos_etapa_pdf(
+    avances_ot: pd.DataFrame,
+    actividades_ot: pd.DataFrame,
+    etapa: str,
+    estilo_caption,
+    estilo_vacio
+):
+    """
+    Devuelve una lista de elementos ReportLab con fotografías
+    de una etapa: INICIO, DURANTE o FINAL.
+    """
+
+    if (
+        avances_ot is None
+        or avances_ot.empty
+    ):
+        return [
+            Paragraph(
+                "Sin evidencia fotográfica registrada.",
+                estilo_vacio
+            )
+        ]
+
+    mapa_actividades = {}
+
+    if (
+        actividades_ot is not None
+        and not actividades_ot.empty
+        and "id" in actividades_ot.columns
+    ):
+        mapa_actividades = (
+            actividades_ot
+            .set_index("id")
+            .to_dict("index")
+        )
+
+    tarjetas = []
+
+    registros_etapa = (
+        avances_ot[
+            avances_ot[
+                "tipo_evidencia"
+            ]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+            .str.upper()
+            .eq(etapa)
+        ]
+        if "tipo_evidencia"
+        in avances_ot.columns
+        else pd.DataFrame()
+    )
+
+    if registros_etapa.empty:
+        return [
+            Paragraph(
+                "Sin evidencia fotográfica registrada.",
+                estilo_vacio
+            )
+        ]
+
+    registros_etapa = (
+        registros_etapa
+        .copy()
+    )
+
+    if "fecha_registro" in (
+        registros_etapa.columns
+    ):
+        registros_etapa[
+            "_fecha_orden"
+        ] = pd.to_datetime(
+            registros_etapa[
+                "fecha_registro"
+            ],
+            errors="coerce",
+            utc=True
+        )
+
+        registros_etapa = (
+            registros_etapa
+            .sort_values(
+                "_fecha_orden"
+            )
+        )
+
+    for _, registro in (
+        registros_etapa.iterrows()
+    ):
+
+        actividad = mapa_actividades.get(
+            registro.get(
+                "actividad_id"
+            ),
+            {}
+        )
+
+        evidencias = (
+            registro.get(
+                "evidencias"
+            )
+            or []
+        )
+
+        if not isinstance(
+            evidencias,
+            (list, tuple)
+        ):
+            continue
+
+        fecha_texto = ""
+
+        fecha_registro = pd.to_datetime(
+            registro.get(
+                "fecha_registro"
+            ),
+            errors="coerce",
+            utc=True
+        )
+
+        if pd.notna(
+            fecha_registro
+        ):
+            fecha_registro = (
+                fecha_registro
+                .tz_convert(
+                    "America/Lima"
+                )
+            )
+
+            fecha_texto = (
+                fecha_registro.strftime(
+                    "%d/%m/%Y %H:%M"
+                )
+            )
+
+        codigo = str(
+            actividad.get(
+                "codigo_actividad",
+                ""
+            )
+            or ""
+        )
+
+        grupo = str(
+            actividad.get(
+                "grupo",
+                ""
+            )
+            or ""
+        )
+
+        avance = float(
+            registro.get(
+                "avance",
+                0
+            )
+            or 0
+        )
+
+        descripcion_avance = str(
+            registro.get(
+                "descripcion_avance",
+                ""
+            )
+            or ""
+        ).strip()
+
+        for evidencia in evidencias:
+
+            imagen_pdf = (
+                preparar_imagen_pdf(
+                    evidencia
+                )
+            )
+
+            if imagen_pdf is None:
+                continue
+
+            titulo_caption = (
+                f"<b>{codigo or 'Actividad'}</b>"
+            )
+
+            if grupo:
+                titulo_caption += (
+                    f" · Grupo {grupo}"
+                )
+
+            titulo_caption += (
+                f" · {avance:.0f}%"
+            )
+
+            if fecha_texto:
+                titulo_caption += (
+                    f"<br/>{fecha_texto}"
+                )
+
+            if descripcion_avance:
+                titulo_caption += (
+                    "<br/>"
+                    + descripcion_avance[:150]
+                )
+
+            caption = Paragraph(
+                titulo_caption,
+                estilo_caption
+            )
+
+            tarjeta = Table(
+                [
+                    [imagen_pdf],
+                    [caption]
+                ],
+                colWidths=[218]
+            )
+
+            tarjeta.setStyle(
+                TableStyle([
+                    (
+                        "BOX",
+                        (0, 0),
+                        (-1, -1),
+                        0.5,
+                        colors.HexColor(
+                            "#D0D5DD"
+                        )
+                    ),
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (-1, -1),
+                        colors.white
+                    ),
+                    (
+                        "ALIGN",
+                        (0, 0),
+                        (-1, 0),
+                        "CENTER"
+                    ),
+                    (
+                        "VALIGN",
+                        (0, 0),
+                        (-1, -1),
+                        "TOP"
+                    ),
+                    (
+                        "TOPPADDING",
+                        (0, 0),
+                        (-1, 0),
+                        5
+                    ),
+                    (
+                        "BOTTOMPADDING",
+                        (0, 0),
+                        (-1, 0),
+                        5
+                    ),
+                    (
+                        "LEFTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        5
+                    ),
+                    (
+                        "RIGHTPADDING",
+                        (0, 0),
+                        (-1, -1),
+                        5
+                    ),
+                    (
+                        "TOPPADDING",
+                        (0, 1),
+                        (-1, 1),
+                        4
+                    ),
+                    (
+                        "BOTTOMPADDING",
+                        (0, 1),
+                        (-1, 1),
+                        5
+                    )
+                ])
+            )
+
+            tarjetas.append(
+                tarjeta
+            )
+
+    if not tarjetas:
+        return [
+            Paragraph(
+                "Sin evidencia fotográfica disponible para insertar en el PDF.",
+                estilo_vacio
+            )
+        ]
+
+    elementos = []
+
+    # Tres fotografías por fila para aprovechar A4 horizontal.
+    for inicio in range(
+        0,
+        len(tarjetas),
+        3
+    ):
+
+        fila = tarjetas[
+            inicio:inicio + 3
+        ]
+
+        while len(fila) < 3:
+            fila.append("")
+
+        tabla_fotos = Table(
+            [fila],
+            colWidths=[
+                232,
+                232,
+                232
+            ]
+        )
+
+        tabla_fotos.setStyle(
+            TableStyle([
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "TOP"
+                ),
+                (
+                    "LEFTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    3
+                ),
+                (
+                    "RIGHTPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    3
+                ),
+                (
+                    "TOPPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    3
+                ),
+                (
+                    "BOTTOMPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    7
+                )
+            ])
+        )
+
+        elementos.append(
+            tabla_fotos
+        )
+
+    return elementos
+
+
+def construir_pdf_fotografico_ot(
+    ot_info: dict,
+    actividades_ot: pd.DataFrame,
+    avances_ot: pd.DataFrame,
+    nombre_area: str
+) -> bytes:
+    """
+    Informe fotográfico por OT:
+    - cabecera de OT / equipo / descripción
+    - KPIs de la OT
+    - cuadro de actividades
+    - evidencias ANTES (INICIO), DURANTE y DESPUÉS (FINAL)
+    """
+
+    buffer = io.BytesIO()
+
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        rightMargin=24,
+        leftMargin=24,
+        topMargin=22,
+        bottomMargin=22
+    )
+
+    styles = getSampleStyleSheet()
+
+    estilo_titulo = ParagraphStyle(
+        "FotoOTTitulo",
+        parent=styles["Title"],
+        fontName="Helvetica-Bold",
+        fontSize=16,
+        leading=19,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor(
+            "#082D55"
+        ),
+        spaceAfter=3
+    )
+
+    estilo_sub = ParagraphStyle(
+        "FotoOTSub",
+        parent=styles["Normal"],
+        fontSize=8.5,
+        leading=11,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor(
+            "#667085"
+        ),
+        spaceAfter=9
+    )
+
+    estilo_h2 = ParagraphStyle(
+        "FotoOTH2",
+        parent=styles["Heading2"],
+        fontName="Helvetica-Bold",
+        fontSize=11,
+        leading=14,
+        textColor=colors.HexColor(
+            "#082D55"
+        ),
+        spaceBefore=6,
+        spaceAfter=5
+    )
+
+    estilo_body = ParagraphStyle(
+        "FotoOTBody",
+        parent=styles["BodyText"],
+        fontSize=8,
+        leading=10.5,
+        textColor=colors.HexColor(
+            "#344054"
+        )
+    )
+
+    estilo_tabla = ParagraphStyle(
+        "FotoOTTabla",
+        parent=estilo_body,
+        fontSize=6.2,
+        leading=7.5
+    )
+
+    estilo_caption = ParagraphStyle(
+        "FotoOTCaption",
+        parent=estilo_body,
+        fontSize=6.5,
+        leading=8,
+        alignment=TA_CENTER
+    )
+
+    estilo_vacio = ParagraphStyle(
+        "FotoOTVacio",
+        parent=estilo_body,
+        fontSize=8,
+        leading=10,
+        textColor=colors.HexColor(
+            "#98A2B3"
+        )
+    )
+
+    story = []
+
+    ot_numero = str(
+        ot_info.get(
+            "ot",
+            ""
+        )
+        or ""
+    )
+
+    equipo = str(
+        ot_info.get(
+            "equipo",
+            ""
+        )
+        or "Sin equipo"
+    )
+
+    descripcion_ot = str(
+        ot_info.get(
+            "descripcion",
+            ""
+        )
+        or ""
+    )
+
+    story.append(
+        Paragraph(
+            "MAININ · PDP CONTROL CENTER QUELLAVECO",
+            estilo_titulo
+        )
+    )
+
+    story.append(
+        Paragraph(
+            (
+                f"INFORME FOTOGRÁFICO POR OT · "
+                f"{nombre_area}"
+            ),
+            estilo_sub
+        )
+    )
+
+    cabecera = Table(
+        [
+            [
+                "OT",
+                ot_numero,
+                "EQUIPO",
+                equipo
+            ],
+            [
+                "ÁREA",
+                str(
+                    nombre_area
+                    or ""
+                ),
+                "FECHA DE EMISIÓN",
+                datetime.now().strftime(
+                    "%d/%m/%Y %H:%M"
+                )
+            ]
+        ],
+        colWidths=[
+            65,
+            270,
+            85,
+            300
+        ]
+    )
+
+    cabecera.setStyle(
+        TableStyle([
+            (
+                "BACKGROUND",
+                (0, 0),
+                (0, -1),
+                colors.HexColor(
+                    "#EEF4FB"
+                )
+            ),
+            (
+                "BACKGROUND",
+                (2, 0),
+                (2, -1),
+                colors.HexColor(
+                    "#EEF4FB"
+                )
+            ),
+            (
+                "FONTNAME",
+                (0, 0),
+                (0, -1),
+                "Helvetica-Bold"
+            ),
+            (
+                "FONTNAME",
+                (2, 0),
+                (2, -1),
+                "Helvetica-Bold"
+            ),
+            (
+                "FONTSIZE",
+                (0, 0),
+                (-1, -1),
+                8
+            ),
+            (
+                "GRID",
+                (0, 0),
+                (-1, -1),
+                0.4,
+                colors.HexColor(
+                    "#D0D5DD"
+                )
+            ),
+            (
+                "VALIGN",
+                (0, 0),
+                (-1, -1),
+                "MIDDLE"
+            ),
+            (
+                "TOPPADDING",
+                (0, 0),
+                (-1, -1),
+                5
+            ),
+            (
+                "BOTTOMPADDING",
+                (0, 0),
+                (-1, -1),
+                5
+            )
+        ])
+    )
+
+    story.append(
+        cabecera
+    )
+
+    if descripcion_ot:
+        story.append(
+            Spacer(1, 7)
+        )
+
+        story.append(
+            Paragraph(
+                (
+                    "<b>Descripción de la OT:</b> "
+                    + descripcion_ot
+                ),
+                estilo_body
+            )
+        )
+
+    story.append(
+        Spacer(1, 8)
+    )
+
+    kpis_ot = compute_kpis(
+        actividades_ot,
+        avances_ot
+    )
+
+    plan_ot = float(
+        kpis_ot.get(
+            "avance_plan",
+            0
+        )
+        or 0
+    )
+
+    real_ot = float(
+        kpis_ot.get(
+            "avance_general",
+            0
+        )
+        or 0
+    )
+
+    brecha_ot = (
+        real_ot
+        - plan_ot
+    )
+
+    conteo_fotos = (
+        contar_fotos_por_etapa(
+            avances_ot
+        )
+    )
+
+    kpi_data = [
+        [
+            "Actividades",
+            "Plan actual",
+            "Avance real",
+            "Brecha",
+            "Culminadas",
+            "HH plan",
+            "HH ganadas"
+        ],
+        [
+            str(
+                int(
+                    kpis_ot.get(
+                        "actividades",
+                        0
+                    )
+                    or 0
+                )
+            ),
+            f"{plan_ot:.1f}%",
+            f"{real_ot:.1f}%",
+            f"{brecha_ot:+.1f} pp",
+            str(
+                int(
+                    kpis_ot.get(
+                        "culminadas",
+                        0
+                    )
+                    or 0
+                )
+            ),
+            f"{float(kpis_ot.get('hh_plan', 0) or 0):.0f}",
+            f"{float(kpis_ot.get('hh_ganadas', 0) or 0):.0f}"
+        ]
+    ]
+
+    tabla_kpis = Table(
+        kpi_data,
+        colWidths=[
+            102,
+            102,
+            102,
+            102,
+            102,
+            102,
+            102
+        ]
+    )
+
+    tabla_kpis.setStyle(
+        TableStyle([
+            (
+                "BACKGROUND",
+                (0, 0),
+                (-1, 0),
+                colors.HexColor(
+                    "#082D55"
+                )
+            ),
+            (
+                "TEXTCOLOR",
+                (0, 0),
+                (-1, 0),
+                colors.white
+            ),
+            (
+                "FONTNAME",
+                (0, 0),
+                (-1, 0),
+                "Helvetica-Bold"
+            ),
+            (
+                "FONTNAME",
+                (0, 1),
+                (-1, 1),
+                "Helvetica-Bold"
+            ),
+            (
+                "ALIGN",
+                (0, 0),
+                (-1, -1),
+                "CENTER"
+            ),
+            (
+                "FONTSIZE",
+                (0, 0),
+                (-1, -1),
+                8
+            ),
+            (
+                "GRID",
+                (0, 0),
+                (-1, -1),
+                0.4,
+                colors.HexColor(
+                    "#D0D5DD"
+                )
+            ),
+            (
+                "TOPPADDING",
+                (0, 0),
+                (-1, -1),
+                6
+            ),
+            (
+                "BOTTOMPADDING",
+                (0, 0),
+                (-1, -1),
+                6
+            )
+        ])
+    )
+
+    story.append(
+        tabla_kpis
+    )
+
+    story.append(
+        Spacer(1, 7)
+    )
+
+    fotos_resumen = Table(
+        [
+            [
+                "ANTES / INICIO",
+                "DURANTE",
+                "DESPUÉS / FINAL"
+            ],
+            [
+                str(
+                    conteo_fotos["INICIO"]
+                ),
+                str(
+                    conteo_fotos["DURANTE"]
+                ),
+                str(
+                    conteo_fotos["FINAL"]
+                )
+            ]
+        ],
+        colWidths=[
+            238,
+            238,
+            238
+        ]
+    )
+
+    fotos_resumen.setStyle(
+        TableStyle([
+            (
+                "BACKGROUND",
+                (0, 0),
+                (-1, 0),
+                colors.HexColor(
+                    "#F2F4F7"
+                )
+            ),
+            (
+                "FONTNAME",
+                (0, 0),
+                (-1, -1),
+                "Helvetica-Bold"
+            ),
+            (
+                "ALIGN",
+                (0, 0),
+                (-1, -1),
+                "CENTER"
+            ),
+            (
+                "GRID",
+                (0, 0),
+                (-1, -1),
+                0.4,
+                colors.HexColor(
+                    "#D0D5DD"
+                )
+            ),
+            (
+                "FONTSIZE",
+                (0, 0),
+                (-1, -1),
+                7.5
+            ),
+            (
+                "TOPPADDING",
+                (0, 0),
+                (-1, -1),
+                4
+            ),
+            (
+                "BOTTOMPADDING",
+                (0, 0),
+                (-1, -1),
+                4
+            )
+        ])
+    )
+
+    story.append(
+        fotos_resumen
+    )
+
+    story.append(
+        Paragraph(
+            "Cuadro de actividades",
+            estilo_h2
+        )
+    )
+
+    estado_ot = calcular_semaforo_pdf(
+        actividades_ot,
+        avances_ot
+    )
+
+    if estado_ot.empty:
+
+        story.append(
+            Paragraph(
+                "No existen actividades registradas para esta OT.",
+                estilo_vacio
+            )
+        )
+
+    else:
+
+        detalle_data = [
+            [
+                "GRUPO",
+                "SUPERVISOR",
+                "DESCRIPCIÓN",
+                "PLAN",
+                "REAL",
+                "ESTADO"
+            ]
+        ]
+
+        for _, fila in (
+            estado_ot.iterrows()
+        ):
+
+            descripcion_actividad = (
+                fila.get(
+                    "descripcion_trabajo"
+                )
+                or fila.get(
+                    "descripcion"
+                )
+                or ""
+            )
+
+            detalle_data.append([
+                Paragraph(
+                    str(
+                        fila.get(
+                            "grupo",
+                            ""
+                        )
+                        or "Sin grupo"
+                    ),
+                    estilo_tabla
+                ),
+                Paragraph(
+                    str(
+                        fila.get(
+                            "supervisor",
+                            ""
+                        )
+                        or ""
+                    ),
+                    estilo_tabla
+                ),
+                Paragraph(
+                    str(
+                        descripcion_actividad
+                    )[:350],
+                    estilo_tabla
+                ),
+                f"{float(fila.get('PLAN ACTUAL (%)', 0) or 0):.1f}%",
+                f"{float(fila.get('avance_real', 0) or 0):.1f}%",
+                Paragraph(
+                    str(
+                        fila.get(
+                            "ALERTA",
+                            ""
+                        )
+                        or ""
+                    ),
+                    estilo_tabla
+                )
+            ])
+
+        tabla_detalle = Table(
+            detalle_data,
+            colWidths=[
+                80,
+                105,
+                335,
+                55,
+                55,
+                85
+            ],
+            repeatRows=1
+        )
+
+        tabla_detalle.setStyle(
+            TableStyle([
+                (
+                    "BACKGROUND",
+                    (0, 0),
+                    (-1, 0),
+                    colors.HexColor(
+                        "#082D55"
+                    )
+                ),
+                (
+                    "TEXTCOLOR",
+                    (0, 0),
+                    (-1, 0),
+                    colors.white
+                ),
+                (
+                    "FONTNAME",
+                    (0, 0),
+                    (-1, 0),
+                    "Helvetica-Bold"
+                ),
+                (
+                    "FONTSIZE",
+                    (0, 0),
+                    (-1, -1),
+                    6.3
+                ),
+                (
+                    "GRID",
+                    (0, 0),
+                    (-1, -1),
+                    0.35,
+                    colors.HexColor(
+                        "#D0D5DD"
+                    )
+                ),
+                (
+                    "VALIGN",
+                    (0, 0),
+                    (-1, -1),
+                    "TOP"
+                ),
+                (
+                    "ALIGN",
+                    (3, 1),
+                    (4, -1),
+                    "CENTER"
+                ),
+                (
+                    "ROWBACKGROUNDS",
+                    (0, 1),
+                    (-1, -1),
+                    [
+                        colors.white,
+                        colors.HexColor(
+                            "#F8FAFC"
+                        )
+                    ]
+                ),
+                (
+                    "TOPPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    3
+                ),
+                (
+                    "BOTTOMPADDING",
+                    (0, 0),
+                    (-1, -1),
+                    3
+                )
+            ])
+        )
+
+        story.append(
+            tabla_detalle
+        )
+
+    # Una página nueva antes del registro fotográfico.
+    story.append(
+        PageBreak()
+    )
+
+    etapas_pdf = [
+        (
+            "INICIO",
+            "ANTES · INICIO"
+        ),
+        (
+            "DURANTE",
+            "DURANTE · EJECUCIÓN"
+        ),
+        (
+            "FINAL",
+            "DESPUÉS · FINAL"
+        )
+    ]
+
+    for indice_etapa, (
+        etapa,
+        titulo_etapa
+    ) in enumerate(etapas_pdf):
+
+        story.append(
+            Paragraph(
+                titulo_etapa,
+                estilo_h2
+            )
+        )
+
+        story.append(
+            Paragraph(
+                (
+                    f"OT {ot_numero} · "
+                    f"Equipo {equipo}"
+                ),
+                estilo_body
+            )
+        )
+
+        story.append(
+            Spacer(1, 5)
+        )
+
+        elementos_fotos = (
+            construir_fotos_etapa_pdf(
+                avances_ot,
+                actividades_ot,
+                etapa,
+                estilo_caption,
+                estilo_vacio
+            )
+        )
+
+        story.extend(
+            elementos_fotos
+        )
+
+        if indice_etapa < (
+            len(etapas_pdf) - 1
+        ):
+            story.append(
+                PageBreak()
+            )
+
+    story.append(
+        Spacer(1, 10)
+    )
+
+    story.append(
+        Paragraph(
+            "MAININ · Informe generado desde PDP Control Center Quellaveco",
+            estilo_sub
+        )
+    )
+
+    doc.build(
+        story
+    )
+
+    buffer.seek(0)
+
+    return buffer.getvalue()
+
+
+def mostrar_reporte_fotografico_ot(
+    df_ots: pd.DataFrame,
+    df_actividades: pd.DataFrame,
+    df_avances: pd.DataFrame,
+    nombre_area: str,
+    key_prefix: str
+):
+    """
+    Panel reutilizable para ADMIN y PLANNER.
+    Permite seleccionar una OT y generar su informe fotográfico.
+    """
+
+    st.subheader(
+        "Informe fotográfico por OT"
+    )
+
+    st.caption(
+        "Seleccione una OT para generar un informe con "
+        "su cuadro de actividades, descripción y evidencias "
+        "fotográficas de Antes, Durante y Después."
+    )
+
+    if (
+        df_ots is None
+        or df_ots.empty
+    ):
+        st.info(
+            "No existen OTs disponibles."
+        )
+        return
+
+    mapa_ots_reporte = {}
+
+    for _, fila_ot in (
+        df_ots.iterrows()
+    ):
+
+        ot_id = fila_ot.get(
+            "id"
+        )
+
+        if pd.isna(
+            ot_id
+        ):
+            continue
+
+        etiqueta = (
+            f"{fila_ot.get('ot', '')} - "
+            f"{fila_ot.get('equipo') or 'Sin equipo'}"
+        )
+
+        mapa_ots_reporte[
+            ot_id
+        ] = etiqueta
+
+    if not mapa_ots_reporte:
+        st.info(
+            "No existen OTs válidas para generar el informe."
+        )
+        return
+
+    ot_id_reporte = st.selectbox(
+        "Seleccionar OT",
+        options=list(
+            mapa_ots_reporte.keys()
+        ),
+        format_func=lambda valor: (
+            mapa_ots_reporte.get(
+                valor,
+                str(valor)
+            )
+        ),
+        key=(
+            f"{key_prefix}_"
+            "selector_ot_fotografico"
+        )
+    )
+
+    fila_ot = (
+        df_ots[
+            df_ots["id"]
+            == ot_id_reporte
+        ]
+        .iloc[0]
+        .to_dict()
+    )
+
+    actividades_ot = (
+        df_actividades[
+            df_actividades[
+                "ot_id"
+            ]
+            == ot_id_reporte
+        ].copy()
+        if (
+            df_actividades is not None
+            and not df_actividades.empty
+            and "ot_id"
+            in df_actividades.columns
+        )
+        else pd.DataFrame()
+    )
+
+    ids_actividades_ot = (
+        actividades_ot[
+            "id"
+        ]
+        .dropna()
+        .tolist()
+        if (
+            not actividades_ot.empty
+            and "id"
+            in actividades_ot.columns
+        )
+        else []
+    )
+
+    avances_ot = (
+        df_avances[
+            df_avances[
+                "actividad_id"
+            ].isin(
+                ids_actividades_ot
+            )
+        ].copy()
+        if (
+            df_avances is not None
+            and not df_avances.empty
+            and "actividad_id"
+            in df_avances.columns
+            and ids_actividades_ot
+        )
+        else pd.DataFrame(
+            columns=(
+                df_avances.columns
+                if df_avances is not None
+                else []
+            )
+        )
+    )
+
+    kpis_ot = compute_kpis(
+        actividades_ot,
+        avances_ot
+    )
+
+    conteo_fotos = contar_fotos_por_etapa(
+        avances_ot
+    )
+
+    fot1, fot2, fot3, fot4 = (
+        st.columns(4)
+    )
+
+    with fot1:
+        st.metric(
+            "Avance OT",
+            f"{float(kpis_ot.get('avance_general', 0) or 0):.1f}%"
+        )
+
+    with fot2:
+        st.metric(
+            "Antes / Inicio",
+            conteo_fotos["INICIO"]
+        )
+
+    with fot3:
+        st.metric(
+            "Durante",
+            conteo_fotos["DURANTE"]
+        )
+
+    with fot4:
+        st.metric(
+            "Después / Final",
+            conteo_fotos["FINAL"]
+        )
+
+    descripcion_ot = str(
+        fila_ot.get(
+            "descripcion",
+            ""
+        )
+        or ""
+    )
+
+    if descripcion_ot:
+        st.info(
+            f"Descripción OT: {descripcion_ot}"
+        )
+
+    estado_ot = calcular_semaforo_pdf(
+        actividades_ot,
+        avances_ot
+    )
+
+    if not estado_ot.empty:
+
+        columnas_preview = [
+            columna
+            for columna in [
+                "grupo",
+                "supervisor",
+                "descripcion",
+                "PLAN ACTUAL (%)",
+                "avance_real",
+                "ALERTA"
+            ]
+            if columna
+            in estado_ot.columns
+        ]
+
+        tabla_preview = (
+            estado_ot[
+                columnas_preview
+            ]
+            .rename(
+                columns={
+                    "grupo": "GRUPO",
+                    "supervisor": "SUPERVISOR",
+                    "descripcion": "DESCRIPCIÓN",
+                    "PLAN ACTUAL (%)": "PLAN (%)",
+                    "avance_real": "REAL (%)",
+                    "ALERTA": "ESTADO"
+                }
+            )
+        )
+
+        st.dataframe(
+            tabla_preview,
+            use_container_width=True,
+            hide_index=True,
+            height=300
+        )
+
+    estado_pdf_key = (
+        f"{key_prefix}_"
+        "pdf_fotografico_ot"
+    )
+
+    generar_pdf = st.button(
+        "Preparar informe fotográfico PDF",
+        type="primary",
+        use_container_width=True,
+        key=(
+            f"{key_prefix}_"
+            "generar_pdf_fotografico_ot"
+        )
+    )
+
+    if generar_pdf:
+
+        with st.spinner(
+            "Preparando cuadro, descripciones y fotografías..."
+        ):
+
+            try:
+                pdf_ot = (
+                    construir_pdf_fotografico_ot(
+                        fila_ot,
+                        actividades_ot,
+                        avances_ot,
+                        nombre_area
+                    )
+                )
+
+                st.session_state[
+                    estado_pdf_key
+                ] = {
+                    "ot_id": ot_id_reporte,
+                    "data": pdf_ot
+                }
+
+                st.success(
+                    "Informe fotográfico preparado correctamente."
+                )
+
+            except Exception as exc:
+
+                st.error(
+                    "No fue posible generar el informe "
+                    f"fotográfico: {exc}"
+                )
+
+    pdf_guardado = st.session_state.get(
+        estado_pdf_key
+    )
+
+    if (
+        isinstance(
+            pdf_guardado,
+            dict
+        )
+        and pdf_guardado.get(
+            "ot_id"
+        )
+        == ot_id_reporte
+        and pdf_guardado.get(
+            "data"
+        )
+    ):
+
+        ot_archivo = "".join(
+            caracter
+            for caracter in str(
+                fila_ot.get(
+                    "ot",
+                    "OT"
+                )
+            )
+            if (
+                caracter.isalnum()
+                or caracter
+                in "-_"
+            )
+        )
+
+        st.download_button(
+            "Descargar informe fotográfico de la OT",
+            data=pdf_guardado[
+                "data"
+            ],
+            file_name=(
+                "Informe_Fotografico_"
+                f"OT_{ot_archivo}_"
+                f"{datetime.now():%Y%m%d_%H%M}.pdf"
+            ),
+            mime="application/pdf",
+            use_container_width=True,
+            key=(
+                f"{key_prefix}_"
+                "descargar_pdf_fotografico_ot"
+            )
+        )
+
+
 # =====================================================
 # PREPARAR DATAFRAME PARA EXCEL
 # =====================================================
@@ -11965,6 +13605,19 @@ if rol == "admin":
                     st.divider()
 
                     # =====================================
+                    # INFORME FOTOGRÁFICO POR OT - ADMIN
+                    # =====================================
+                    mostrar_reporte_fotografico_ot(
+                        df_ots_reporte_admin,
+                        df_actividades_reporte_admin,
+                        df_avances_reporte_admin,
+                        nombre_reporte_admin,
+                        "admin"
+                    )
+
+                    st.divider()
+
+                    # =====================================
                     # REPORTE POR SUPERVISOR - ADMIN
                     # =====================================
                     st.markdown(
@@ -16217,6 +17870,19 @@ else:
                         "SPI",
                         f"{kpis_reporte['spi']:.2f}"
                     )
+
+                st.divider()
+
+                # =========================================
+                # INFORME FOTOGRÁFICO POR OT
+                # =========================================
+                mostrar_reporte_fotografico_ot(
+                    df_ots_reporte,
+                    df_actividades_reporte,
+                    df_avances_reporte,
+                    nombre_area,
+                    "planner"
+                )
 
                 st.divider()
 
