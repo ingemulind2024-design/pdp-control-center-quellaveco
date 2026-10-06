@@ -12900,93 +12900,119 @@ else:
 
                 if "supervisor" in df_estado.columns:
 
-                    supervisor = (
-                        df_estado
-                        .groupby(
-                            "supervisor",
-                            dropna=False
-                        )
-                        .apply(
-                            lambda grupo: pd.Series({
-                                "Avance": weighted_progress(
-                                    grupo
-                                ),
-                                "Actividades": len(grupo),
-                                "Pendientes": int(
-                                    (
-                                        grupo["avance_real"]
-                                        < 100
-                                    ).sum()
-                                )
-                            })
-                        )
-                        .reset_index()
+                    # =========================================
+                    # AVANCE POR SUPERVISOR
+                    # =========================================
+                    # Las actividades sin supervisor asignado
+                    # NO se muestran en esta gráfica.
+                    # Importante: siguen formando parte de los
+                    # KPIs generales y de la base de datos.
+                    df_supervisor_grafico = (
+                        df_estado.copy()
                     )
 
-                    supervisor[
-                        "supervisor"
-                    ] = (
-                        supervisor[
+                    supervisor_normalizado_grafico = (
+                        df_supervisor_grafico[
                             "supervisor"
                         ]
-                        .fillna("SIN SUPERVISOR")
+                        .fillna("")
+                        .astype(str)
+                        .str.strip()
                     )
 
-                    supervisor = (
-                        supervisor
-                        .sort_values(
-                            "Avance",
-                            ascending=True
+                    df_supervisor_grafico = (
+                        df_supervisor_grafico[
+                            supervisor_normalizado_grafico.ne("")
+                        ]
+                        .copy()
+                    )
+
+                    if df_supervisor_grafico.empty:
+
+                        st.info(
+                            "No existen actividades con "
+                            "supervisor asignado."
                         )
-                    )
 
-                    fig_sup = px.bar(
-                        supervisor,
-                        x="Avance",
-                        y="supervisor",
-                        orientation="h",
-                        text="Avance",
-                        color_discrete_sequence=["#155EEF"]
-                    )
+                    else:
 
-                    fig_sup.update_traces(
-                        texttemplate="%{text:.1f}%",
-                        textposition="outside",
-                        textfont=dict(size=12, color="#0B1F33"),
-                        cliponaxis=False,
-                        marker_line_width=0,
-                        hovertemplate="<b>%{y}</b><br>Avance: %{x:.1f}%<extra></extra>"
-                    )
+                        supervisor = (
+                            df_supervisor_grafico
+                            .groupby(
+                                "supervisor",
+                                dropna=False
+                            )
+                            .apply(
+                                lambda grupo: pd.Series({
+                                    "Avance": weighted_progress(
+                                        grupo
+                                    ),
+                                    "Actividades": len(grupo),
+                                    "Pendientes": int(
+                                        (
+                                            grupo["avance_real"]
+                                            < 100
+                                        ).sum()
+                                    )
+                                })
+                            )
+                            .reset_index()
+                        )
 
-                    fig_sup.update_layout(
-                        paper_bgcolor="#FFFFFF",
-                        plot_bgcolor="#FFFFFF",
-                        font=dict(color="#1F2937", size=13),
-                        xaxis_title="Avance (%)",
-                        yaxis_title="",
-                        xaxis=dict(
-                            range=[0, 105],
-                            ticksuffix="%",
-                            gridcolor="#E5EAF0",
-                            linecolor="#98A2B3",
-                            tickfont=dict(size=11, color="#344054")
-                        ),
-                        yaxis=dict(
-                            gridcolor="rgba(0,0,0,0)",
-                            linecolor="#D0D5DD",
-                            tickfont=dict(size=11, color="#344054"),
-                            automargin=True
-                        ),
-                        margin=dict(l=18, r=44, t=12, b=24),
-                        height=380
-                    )
+                        supervisor = (
+                            supervisor
+                            .sort_values(
+                                "Avance",
+                                ascending=True
+                            )
+                        )
 
-                    st.plotly_chart(
-                        fig_sup,
-                        use_container_width=True,
-                        config={"displaylogo": False, "displayModeBar": False, "responsive": True}
-                    )
+                        fig_sup = px.bar(
+                            supervisor,
+                            x="Avance",
+                            y="supervisor",
+                            orientation="h",
+                            text="Avance",
+                            color_discrete_sequence=["#155EEF"]
+                        )
 
+                        fig_sup.update_traces(
+                            texttemplate="%{text:.1f}%",
+                            textposition="outside",
+                            textfont=dict(size=12, color="#0B1F33"),
+                            cliponaxis=False,
+                            marker_line_width=0,
+                            hovertemplate="<b>%{y}</b><br>Avance: %{x:.1f}%<extra></extra>"
+                        )
+
+                        fig_sup.update_layout(
+                            paper_bgcolor="#FFFFFF",
+                            plot_bgcolor="#FFFFFF",
+                            font=dict(color="#1F2937", size=13),
+                            xaxis_title="Avance (%)",
+                            yaxis_title="",
+                            xaxis=dict(
+                                range=[0, 105],
+                                ticksuffix="%",
+                                gridcolor="#E5EAF0",
+                                linecolor="#98A2B3",
+                                tickfont=dict(size=11, color="#344054")
+                            ),
+                            yaxis=dict(
+                                gridcolor="rgba(0,0,0,0)",
+                                linecolor="#D0D5DD",
+                                tickfont=dict(size=11, color="#344054"),
+                                automargin=True
+                            ),
+                            margin=dict(l=18, r=44, t=12, b=24),
+                            height=380
+                        )
+
+                        st.plotly_chart(
+                            fig_sup,
+                            use_container_width=True,
+                            config={"displaylogo": False, "displayModeBar": False, "responsive": True}
+                        )
             st.divider()
 
             # =============================================
