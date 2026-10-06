@@ -2912,6 +2912,36 @@ CORTE_CLIENTE_DATOS = {
     }
 }
 
+# =====================================================
+# CORRECCIONES HISTÓRICAS DE CURVA S
+# =====================================================
+# Ajustes solicitados para Instrumentación:
+# 05/10/2026 07:00 -> 51.3%
+# 05/10/2026 14:00 -> 65.2%
+#
+# El consolidado se recalcula con el mismo criterio que
+# ya usa el aplicativo: promedio ponderado por cantidad
+# de actividades de cada área.
+#
+# Electricidad:    164 actividades
+# Instrumentación: 210 actividades
+# Total:           374 actividades
+#
+# Valores resultantes consolidados:
+# 07:00 -> 54.6%
+# 14:00 -> 65.0%
+
+CORRECCIONES_CURVA_REAL = {
+    "INSTRUMENTACION": {
+        pd.Timestamp("2026-10-05 07:00:00"): 51.3,
+        pd.Timestamp("2026-10-05 14:00:00"): 65.2
+    },
+    "CONSOLIDADO": {
+        pd.Timestamp("2026-10-05 07:00:00"): 54.6,
+        pd.Timestamp("2026-10-05 14:00:00"): 65.0
+    }
+}
+
 
 def identificar_vista_corte_cliente(
     activities: pd.DataFrame
@@ -3716,6 +3746,98 @@ def build_s_curve(
             .cummax()
         )
 
+        indices_real = (
+            curva.index[
+                curva["REAL"].notna()
+            ]
+            .tolist()
+        )
+
+        if indices_real:
+
+            curva.loc[
+                indices_real,
+                "REAL"
+            ] = (
+                pd.to_numeric(
+                    curva.loc[
+                        indices_real,
+                        "REAL"
+                    ],
+                    errors="coerce"
+                )
+                .fillna(0)
+                .clip(0, 100)
+                .cummax()
+            )
+
+    # =====================================================
+    # CORRECCIONES HISTÓRICAS ADICIONALES
+    # =====================================================
+    # Se aplican después del cálculo normal de la curva y
+    # antes de devolverla. No se alteran las fechas ni horas
+    # de los cortes oficiales.
+    vista_curva = identificar_vista_corte_cliente(
+        activities
+    )
+
+    correcciones_vista = (
+        CORRECCIONES_CURVA_REAL.get(
+            vista_curva,
+            {}
+        )
+    )
+
+    if correcciones_vista:
+
+        for fecha_correccion, real_correccion in (
+            correcciones_vista.items()
+        ):
+
+            coincidencia = (
+                curva["fecha"]
+                == fecha_correccion
+            )
+
+            if coincidencia.any():
+
+                indice_correccion = (
+                    curva.index[
+                        coincidencia
+                    ][0]
+                )
+
+                curva.loc[
+                    indice_correccion,
+                    "REAL"
+                ] = float(
+                    real_correccion
+                )
+
+            else:
+
+                # Respaldo por si el corte no existiera por
+                # alguna diferencia de rango de planificación.
+                fila_correccion = pd.DataFrame({
+                    "fecha": [fecha_correccion],
+                    "PLAN": [None],
+                    "REAL": [float(real_correccion)],
+                    "CORTE_VALIDADO": [False]
+                })
+
+                curva = pd.concat(
+                    [
+                        curva,
+                        fila_correccion
+                    ],
+                    ignore_index=True
+                ).sort_values(
+                    "fecha"
+                ).reset_index(
+                    drop=True
+                )
+
+        # Mantener propiedad acumulativa de la Curva S.
         indices_real = (
             curva.index[
                 curva["REAL"].notna()
