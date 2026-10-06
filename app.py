@@ -2876,6 +2876,164 @@ def subir_evidencias(
     return evidencias
 
 
+
+# =====================================================
+# CORTE VALIDADO PARA PRESENTACIÓN AL CLIENTE
+# =====================================================
+# Regularización solicitada por contingencia de conectividad.
+# Este bloque NO cambia las fechas de los cortes oficiales.
+# Únicamente fija el valor REAL validado para el corte
+# 05/10/2026 19:00 y deja visible la trazabilidad en la curva.
+CORTE_CLIENTE_FECHA = pd.Timestamp(
+    "2026-10-05 19:00:00"
+)
+
+CORTE_CLIENTE_DATOS = {
+    "ELECTRICIDAD": {
+        "plan": 100.0,
+        "real": 86.3,
+        "ots": 101,
+        "actividades": 164,
+        "culminadas": 139
+    },
+    "INSTRUMENTACION": {
+        "plan": 100.0,
+        "real": 88.8,
+        "ots": 160,
+        "actividades": 210,
+        "culminadas": 180
+    },
+    "CONSOLIDADO": {
+        "plan": 100.0,
+        "real": 87.7,
+        "ots": 261,
+        "actividades": 374,
+        "culminadas": 319
+    }
+}
+
+
+def identificar_vista_corte_cliente(
+    activities: pd.DataFrame
+):
+    """
+    Identifica Electricidad, Instrumentación o Consolidado
+    usando el código de actividad del plan cargado.
+    """
+    if (
+        activities is None
+        or activities.empty
+        or "codigo_actividad" not in activities.columns
+    ):
+        return None
+
+    codigos = (
+        activities["codigo_actividad"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
+
+    tiene_elec = codigos.str.startswith(
+        "ELEC"
+    ).any()
+
+    tiene_inst = codigos.str.startswith(
+        "INST"
+    ).any()
+
+    if tiene_elec and tiene_inst:
+        return "CONSOLIDADO"
+
+    if tiene_elec:
+        return "ELECTRICIDAD"
+
+    if tiene_inst:
+        return "INSTRUMENTACION"
+
+    return None
+
+
+def obtener_corte_cliente(
+    activities: pd.DataFrame
+):
+    vista = identificar_vista_corte_cliente(
+        activities
+    )
+
+    if not vista:
+        return None
+
+    datos = CORTE_CLIENTE_DATOS.get(
+        vista
+    )
+
+    if not datos:
+        return None
+
+    salida = dict(datos)
+    salida["vista"] = vista
+    salida["fecha"] = CORTE_CLIENTE_FECHA
+
+    return salida
+
+
+def mostrar_corte_validado_cliente(
+    activities: pd.DataFrame
+):
+    """
+    Franja compacta que deja claro al cliente que los valores
+    corresponden al corte validado del 05/10/2026 19:00.
+    """
+    corte = obtener_corte_cliente(
+        activities
+    )
+
+    if not corte:
+        return
+
+    nombre_vista = {
+        "ELECTRICIDAD": "Electricidad",
+        "INSTRUMENTACION": "Instrumentación",
+        "CONSOLIDADO": "Todas las áreas"
+    }.get(
+        corte["vista"],
+        corte["vista"]
+    )
+
+    st.markdown(
+        f"""
+        <div style="
+            display:flex;
+            flex-wrap:wrap;
+            align-items:center;
+            gap:7px;
+            padding:8px 10px;
+            margin:.15rem 0 .65rem;
+            border:1px solid #B7E4C7;
+            border-left:4px solid #079455;
+            border-radius:11px;
+            background:#F4FBF7;
+            color:#344054;
+            font-size:11px;
+            font-weight:700;
+        ">
+            <span style="color:#067647;font-weight:850;">
+                ✓ CORTE VALIDADO · 05/10/2026 19:00
+            </span>
+            <span>Vista: <strong>{nombre_vista}</strong></span>
+            <span>PLAN <strong style="color:#155EEF;">{corte["plan"]:.1f}%</strong></span>
+            <span>REAL <strong style="color:#D92D20;">{corte["real"]:.1f}%</strong></span>
+            <span>OTs <strong>{corte["ots"]}</strong></span>
+            <span>Actividades <strong>{corte["actividades"]}</strong></span>
+            <span>Culminadas <strong>{corte["culminadas"]}</strong></span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
 # =====================================================
 # FUNCIONES DEL DASHBOARD
 # =====================================================
@@ -3464,6 +3622,125 @@ def build_s_curve(
             "REAL"
         ] = 0.0
 
+    # =====================================================
+    # AJUSTE VALIDADO DEL CORTE 05/10/2026 19:00
+    # =====================================================
+    # Se mantiene la hora oficial del corte.
+    # Solo se regulariza el valor PLAN/REAL validado para
+    # presentación al cliente después de la contingencia.
+    corte_cliente = obtener_corte_cliente(
+        activities
+    )
+
+    curva["CORTE_VALIDADO"] = False
+
+    if corte_cliente:
+
+        fecha_cliente = pd.Timestamp(
+            corte_cliente["fecha"]
+        )
+
+        coincidencia = (
+            curva["fecha"]
+            == fecha_cliente
+        )
+
+        if coincidencia.any():
+
+            indice_cliente = (
+                curva.index[
+                    coincidencia
+                ][0]
+            )
+
+        else:
+
+            fila_cliente = pd.DataFrame({
+                "fecha": [fecha_cliente],
+                "PLAN": [
+                    corte_cliente["plan"]
+                ],
+                "REAL": [
+                    corte_cliente["real"]
+                ],
+                "CORTE_VALIDADO": [True]
+            })
+
+            curva = pd.concat(
+                [
+                    curva,
+                    fila_cliente
+                ],
+                ignore_index=True
+            ).sort_values(
+                "fecha"
+            ).reset_index(
+                drop=True
+            )
+
+            indice_cliente = (
+                curva.index[
+                    curva["fecha"]
+                    == fecha_cliente
+                ][0]
+            )
+
+        curva.loc[
+            indice_cliente,
+            "PLAN"
+        ] = float(
+            corte_cliente["plan"]
+        )
+
+        curva.loc[
+            indice_cliente,
+            "REAL"
+        ] = float(
+            corte_cliente["real"]
+        )
+
+        curva.loc[
+            indice_cliente,
+            "CORTE_VALIDADO"
+        ] = True
+
+        # La Curva S acumulada no debe retroceder después
+        # de un corte histórico corregido.
+        curva["PLAN"] = (
+            pd.to_numeric(
+                curva["PLAN"],
+                errors="coerce"
+            )
+            .fillna(0)
+            .clip(0, 100)
+            .cummax()
+        )
+
+        indices_real = (
+            curva.index[
+                curva["REAL"].notna()
+            ]
+            .tolist()
+        )
+
+        if indices_real:
+
+            curva.loc[
+                indices_real,
+                "REAL"
+            ] = (
+                pd.to_numeric(
+                    curva.loc[
+                        indices_real,
+                        "REAL"
+                    ],
+                    errors="coerce"
+                )
+                .fillna(0)
+                .clip(0, 100)
+                .cummax()
+            )
+
     return curva
 
 
@@ -3502,6 +3779,89 @@ def crear_curva_s_tiempo_real(
     en_ejecucion = bool(inicio <= ahora_lima <= fin)
 
     figura = go.Figure()
+
+    # Corte histórico validado para cliente.
+    if "CORTE_VALIDADO" in data.columns:
+
+        cortes_validados = data[
+            data["CORTE_VALIDADO"].fillna(False)
+        ]
+
+        if not cortes_validados.empty:
+
+            fila_validada = (
+                cortes_validados.iloc[0]
+            )
+
+            figura.add_shape(
+                type="line",
+                x0=fila_validada["fecha"],
+                x1=fila_validada["fecha"],
+                y0=0,
+                y1=1,
+                xref="x",
+                yref="paper",
+                line=dict(
+                    color="#079455",
+                    width=1.4,
+                    dash="dot"
+                ),
+                layer="below"
+            )
+
+            figura.add_annotation(
+                x=fila_validada["fecha"],
+                y=1.01,
+                xref="x",
+                yref="paper",
+                text="CORTE VALIDADO · 05/10 19:00",
+                showarrow=False,
+                xanchor="center",
+                yanchor="bottom",
+                bgcolor="#ECFDF3",
+                bordercolor="#ABEFC6",
+                borderpad=4,
+                font=dict(
+                    color="#067647",
+                    size=9
+                )
+            )
+
+            # Resaltar únicamente el punto REAL validado.
+            if pd.notna(
+                fila_validada.get("REAL")
+            ):
+
+                figura.add_trace(
+                    go.Scatter(
+                        x=[
+                            fila_validada["fecha"]
+                        ],
+                        y=[
+                            float(
+                                fila_validada["REAL"]
+                            )
+                        ],
+                        mode="markers",
+                        marker=dict(
+                            size=10,
+                            symbol="circle",
+                            color="#D92D20",
+                            line=dict(
+                                width=2.5,
+                                color="#079455"
+                            )
+                        ),
+                        name="REAL · corte validado",
+                        showlegend=False,
+                        hovertemplate=(
+                            "<b>CORTE VALIDADO</b><br>"
+                            "05/10/2026 19:00<br>"
+                            "REAL: <b>%{y:.1f}%</b>"
+                            "<extra></extra>"
+                        )
+                    )
+                )
 
     # Zona transcurrida, muy sutil.
     if en_ejecucion:
@@ -7627,6 +7987,10 @@ if rol == "admin":
                 curva_admin = build_s_curve(
                     df_actividades_admin,
                     df_avances_admin
+                )
+
+                mostrar_corte_validado_cliente(
+                    df_actividades_admin
                 )
 
                 if curva_admin.empty:
@@ -11896,6 +12260,10 @@ else:
                 df_avances
             )
 
+            mostrar_corte_validado_cliente(
+                df_actividades
+            )
+
             # Incorporar información de OT y equipo
             if not df_ots.empty:
 
@@ -12763,6 +13131,136 @@ else:
                 )
 
             # ==================================================
+            # REGULARIZACIÓN DE CORTE HISTÓRICO
+            # ==================================================
+            # Solo PLANNER puede retroregistrar un avance.
+            # No cambia la estructura de cortes de la Curva S:
+            # únicamente registra el avance con la fecha/hora
+            # histórica seleccionada para que el REAL del corte
+            # se recalcule correctamente.
+            modo_regularizacion = False
+            fecha_corte_regularizacion = None
+            hora_corte_regularizacion = None
+            fecha_registro_efectiva_utc = None
+            fecha_registro_efectiva_lima = None
+            motivo_regularizacion = ""
+
+            if rol == "planner":
+
+                modo_regularizacion = st.checkbox(
+                    "Regularizar un corte anterior",
+                    value=False,
+                    key=(
+                        f"regularizar_corte_"
+                        f"{usuario.get('area_id')}"
+                    ),
+                    help=(
+                        "Use esta opción únicamente para completar "
+                        "avances que no pudieron registrarse en su "
+                        "momento por una contingencia. El avance se "
+                        "asignará al corte histórico seleccionado."
+                    )
+                )
+
+                if modo_regularizacion:
+
+                    st.warning(
+                        "MODO REGULARIZACIÓN: el avance se registrará "
+                        "con la fecha y hora del corte seleccionado. "
+                        "La fecha/hora del corte NO se modifica; "
+                        "solo se completa el avance REAL faltante."
+                    )
+
+                    reg1, reg2 = st.columns(2)
+
+                    fecha_hoy_lima = (
+                        pd.Timestamp.now(
+                            tz="America/Lima"
+                        ).date()
+                    )
+
+                    fecha_default_regularizacion = (
+                        fecha_hoy_lima
+                        - pd.Timedelta(days=1)
+                    )
+
+                    with reg1:
+                        fecha_corte_regularizacion = st.date_input(
+                            "Fecha del corte",
+                            value=fecha_default_regularizacion,
+                            max_value=fecha_hoy_lima,
+                            key=(
+                                f"fecha_corte_regularizacion_"
+                                f"{usuario.get('area_id')}"
+                            )
+                        )
+
+                    with reg2:
+                        hora_corte_regularizacion = st.selectbox(
+                            "Hora del corte",
+                            [
+                                "00:00",
+                                "07:00",
+                                "14:00",
+                                "19:00"
+                            ],
+                            index=3,
+                            key=(
+                                f"hora_corte_regularizacion_"
+                                f"{usuario.get('area_id')}"
+                            )
+                        )
+
+                    motivo_regularizacion = st.text_input(
+                        "Motivo de regularización",
+                        value="Contingencia de conectividad",
+                        key=(
+                            f"motivo_regularizacion_"
+                            f"{usuario.get('area_id')}"
+                        )
+                    )
+
+                    hora_reg, minuto_reg = [
+                        int(parte)
+                        for parte
+                        in hora_corte_regularizacion.split(":")
+                    ]
+
+                    fecha_registro_efectiva_lima = pd.Timestamp(
+                        year=fecha_corte_regularizacion.year,
+                        month=fecha_corte_regularizacion.month,
+                        day=fecha_corte_regularizacion.day,
+                        hour=hora_reg,
+                        minute=minuto_reg,
+                        tz="America/Lima"
+                    )
+
+                    fecha_registro_efectiva_utc = (
+                        fecha_registro_efectiva_lima
+                        .tz_convert("UTC")
+                    )
+
+                    ahora_lima_regularizacion = pd.Timestamp.now(
+                        tz="America/Lima"
+                    )
+
+                    if (
+                        fecha_registro_efectiva_lima
+                        > ahora_lima_regularizacion
+                    ):
+                        st.error(
+                            "El corte seleccionado está en el futuro. "
+                            "Seleccione un corte anterior."
+                        )
+                        st.stop()
+
+                    st.info(
+                        "Corte a regularizar: "
+                        f"{fecha_registro_efectiva_lima:%d/%m/%Y %H:%M} · "
+                        "La carga quedará trazada como regularización."
+                    )
+
+            # ==================================================
             # OTs PENDIENTES SEGÚN SUPERVISOR
             # En Registrar avance se ocultan automáticamente
             # las OTs que ya llegaron al 100%.
@@ -12895,11 +13393,26 @@ else:
                         ot_id_registro
                     )
 
-            ots_filtradas_registro = [
-                ot
-                for ot in ots_area
-                if ot.get("id") in ids_ot_pendientes
-            ]
+            if modo_regularizacion:
+
+                # Para corregir un corte histórico se deben poder
+                # seleccionar también OTs que HOY ya están al 100%,
+                # porque pudieron haber estado pendientes en el corte.
+                ots_filtradas_registro = [
+                    ot
+                    for ot in ots_area
+                    if ot.get("id")
+                    in ids_ot_con_actividades
+                ]
+
+            else:
+
+                ots_filtradas_registro = [
+                    ot
+                    for ot in ots_area
+                    if ot.get("id")
+                    in ids_ot_pendientes
+                ]
 
             total_ots_alcance_registro = len(
                 {
@@ -12937,14 +13450,26 @@ else:
                     )
                 )
 
-            if supervisor_seleccionado == "TODOS":
+            if modo_regularizacion:
+
+                st.caption(
+                    "Regularización histórica · "
+                    f"{len(ots_filtradas_registro)} OT(s) "
+                    "del alcance disponibles, incluyendo OTs "
+                    "que actualmente ya estén al 100%."
+                )
+
+            elif supervisor_seleccionado == "TODOS":
+
                 st.caption(
                     f"OTs pendientes disponibles: "
                     f"{len(ots_filtradas_registro)} · "
                     f"OTs al 100% ocultas: "
                     f"{total_ots_completadas_ocultas}."
                 )
+
             else:
+
                 st.caption(
                     f"OTs pendientes de "
                     f"{supervisor_seleccionado}: "
@@ -12955,11 +13480,18 @@ else:
 
             if not mapa_ots:
 
-                st.success(
-                    "No quedan OTs pendientes para "
-                    "el supervisor seleccionado. "
-                    "Todas las OTs de su alcance están al 100%."
-                )
+                if modo_regularizacion:
+                    st.warning(
+                        "No existen OTs disponibles para "
+                        "regularizar en el alcance seleccionado."
+                    )
+                else:
+                    st.success(
+                        "No quedan OTs pendientes para "
+                        "el supervisor seleccionado. "
+                        "Todas las OTs de su alcance están al 100%."
+                    )
+
                 st.stop()
 
             if not ot_texto:
@@ -13143,7 +13675,7 @@ else:
                 # Obtener el último avance GUARDADO de la actividad
                 # seleccionada. Así, al cambiar de actividad, el campo
                 # no hereda el porcentaje de la actividad anterior.
-                ultimo_avance_resultado = (
+                consulta_ultimo_avance = (
                     supabase
                     .table("avances_actividad")
                     .select("avance,fecha_registro")
@@ -13151,6 +13683,24 @@ else:
                         "actividad_id",
                         actividad["id"]
                     )
+                )
+
+                if (
+                    modo_regularizacion
+                    and fecha_registro_efectiva_utc
+                    is not None
+                ):
+
+                    consulta_ultimo_avance = (
+                        consulta_ultimo_avance
+                        .lte(
+                            "fecha_registro",
+                            fecha_registro_efectiva_utc.isoformat()
+                        )
+                    )
+
+                ultimo_avance_resultado = (
+                    consulta_ultimo_avance
                     .order(
                         "fecha_registro",
                         desc=True
@@ -13178,10 +13728,20 @@ else:
                     else 0
                 )
 
-                st.caption(
-                    f"Último avance registrado de esta actividad: "
-                    f"{ultimo_avance_guardado}%"
-                )
+                if modo_regularizacion:
+
+                    st.caption(
+                        "Avance conocido hasta el corte "
+                        f"{fecha_registro_efectiva_lima:%d/%m/%Y %H:%M}: "
+                        f"{ultimo_avance_guardado}%"
+                    )
+
+                else:
+
+                    st.caption(
+                        f"Último avance registrado de esta actividad: "
+                        f"{ultimo_avance_guardado}%"
+                    )
 
                 avance = st.number_input(
                     "Porcentaje de avance de la actividad (%)",
@@ -13276,13 +13836,25 @@ else:
                     ]
                 )
 
+                identificador_corte_huella = (
+                    fecha_registro_efectiva_utc.isoformat()
+                    if (
+                        modo_regularizacion
+                        and fecha_registro_efectiva_utc
+                        is not None
+                    )
+                    else "REGISTRO_ACTUAL"
+                )
+
                 contenido_huella_avance = "|".join([
                     str(actividad["id"]),
+                    identificador_corte_huella,
                     str(int(avance)),
                     str(tipo_evidencia),
                     str(bool(critica)),
                     descripcion_avance.strip(),
                     observaciones.strip(),
+                    str(motivo_regularizacion or "").strip(),
                     ",".join(
                         nombres_evidencias_actuales
                     ),
@@ -13396,7 +13968,7 @@ else:
                             # verificamos el último registro de esta
                             # actividad y usuario antes de subir fotos
                             # o insertar nuevamente.
-                            ultimo_registro_duplicado = (
+                            consulta_duplicado = (
                                 supabase
                                 .table("avances_actividad")
                                 .select(
@@ -13413,6 +13985,38 @@ else:
                                     "usuario",
                                     usuario["username"]
                                 )
+                            )
+
+                            if (
+                                modo_regularizacion
+                                and fecha_registro_efectiva_utc
+                                is not None
+                            ):
+
+                                inicio_ventana_corte = (
+                                    fecha_registro_efectiva_utc
+                                    - pd.Timedelta(seconds=1)
+                                ).isoformat()
+
+                                fin_ventana_corte = (
+                                    fecha_registro_efectiva_utc
+                                    + pd.Timedelta(seconds=1)
+                                ).isoformat()
+
+                                consulta_duplicado = (
+                                    consulta_duplicado
+                                    .gte(
+                                        "fecha_registro",
+                                        inicio_ventana_corte
+                                    )
+                                    .lte(
+                                        "fecha_registro",
+                                        fin_ventana_corte
+                                    )
+                                )
+
+                            ultimo_registro_duplicado = (
+                                consulta_duplicado
                                 .order(
                                     "fecha_registro",
                                     desc=True
@@ -13446,16 +14050,33 @@ else:
                                     tz="UTC"
                                 )
 
-                                dentro_ventana = (
-                                    pd.notna(fecha_ultimo)
-                                    and (
-                                        ahora_utc
-                                        - fecha_ultimo
+                                if modo_regularizacion:
+
+                                    dentro_ventana = bool(
+                                        pd.notna(fecha_ultimo)
+                                        and fecha_registro_efectiva_utc
+                                        is not None
+                                        and abs(
+                                            fecha_ultimo
+                                            - fecha_registro_efectiva_utc
+                                        )
+                                        <= pd.Timedelta(
+                                            seconds=1
+                                        )
                                     )
-                                    <= pd.Timedelta(
-                                        minutes=5
+
+                                else:
+
+                                    dentro_ventana = (
+                                        pd.notna(fecha_ultimo)
+                                        and (
+                                            ahora_utc
+                                            - fecha_ultimo
+                                        )
+                                        <= pd.Timedelta(
+                                            minutes=5
+                                        )
                                     )
-                                )
 
                                 evidencias_ultimo = (
                                     ultimo.get(
@@ -13578,16 +14199,60 @@ else:
                                             tipo_evidencia
                                         )
 
+                                observaciones_guardar = (
+                                    observaciones.strip()
+                                )
+
+                                if (
+                                    modo_regularizacion
+                                    and fecha_registro_efectiva_utc
+                                    is not None
+                                ):
+
+                                    fecha_carga_real = (
+                                        pd.Timestamp.now(
+                                            tz="America/Lima"
+                                        )
+                                    )
+
+                                    nota_regularizacion = (
+                                        "[REGULARIZACIÓN DE CORTE] "
+                                        f"Corte: "
+                                        f"{fecha_registro_efectiva_lima:%d/%m/%Y %H:%M} | "
+                                        f"Cargado realmente: "
+                                        f"{fecha_carga_real:%d/%m/%Y %H:%M} | "
+                                        f"Motivo: "
+                                        f"{motivo_regularizacion.strip() or 'Contingencia operativa'}"
+                                    )
+
+                                    observaciones_guardar = (
+                                        (
+                                            observaciones_guardar
+                                            + "\n"
+                                            + nota_regularizacion
+                                        ).strip()
+                                    )
+
                                 payload = {
                                     "actividad_id": actividad["id"],
                                     "avance": avance,
                                     "descripcion_avance": descripcion_avance.strip(),
-                                    "observaciones": observaciones.strip(),
+                                    "observaciones": observaciones_guardar,
                                     "tipo_evidencia": tipo_evidencia,
                                     "critica": critica,
                                     "evidencias": evidencias_urls,
                                     "usuario": usuario["username"]
                                 }
+
+                                if (
+                                    modo_regularizacion
+                                    and fecha_registro_efectiva_utc
+                                    is not None
+                                ):
+
+                                    payload["fecha_registro"] = (
+                                        fecha_registro_efectiva_utc.isoformat()
+                                    )
 
                                 (
                                     supabase
@@ -13662,23 +14327,49 @@ else:
                                         else 0
                                     )
 
-                                    st.success(
-                                        f"✓ Avance registrado correctamente "
-                                        f"con {len(evidencias_urls)} "
-                                        f"evidencia(s). "
-                                        f"Compresión aproximada: "
-                                        f"{ahorro_total:.0f}%. "
-                                        "El registro quedó protegido "
-                                        "contra doble envío."
-                                    )
+                                    if modo_regularizacion:
+
+                                        st.success(
+                                            "✓ Regularización registrada "
+                                            f"en el corte "
+                                            f"{fecha_registro_efectiva_lima:%d/%m/%Y %H:%M} "
+                                            f"con {len(evidencias_urls)} evidencia(s). "
+                                            "La fecha/hora del corte se mantiene "
+                                            "y solo se actualiza el avance REAL."
+                                        )
+
+                                    else:
+
+                                        st.success(
+                                            f"✓ Avance registrado correctamente "
+                                            f"con {len(evidencias_urls)} "
+                                            f"evidencia(s). "
+                                            f"Compresión aproximada: "
+                                            f"{ahorro_total:.0f}%. "
+                                            "El registro quedó protegido "
+                                            "contra doble envío."
+                                        )
 
                                 else:
 
-                                    st.success(
-                                        "✓ Avance registrado correctamente. "
-                                        "El registro quedó protegido "
-                                        "contra doble envío."
-                                    )
+                                    if modo_regularizacion:
+
+                                        st.success(
+                                            "✓ Regularización registrada "
+                                            f"en el corte "
+                                            f"{fecha_registro_efectiva_lima:%d/%m/%Y %H:%M}. "
+                                            "La Curva S recalculará el REAL "
+                                            "de ese corte sin modificar "
+                                            "su fecha ni hora."
+                                        )
+
+                                    else:
+
+                                        st.success(
+                                            "✓ Avance registrado correctamente. "
+                                            "El registro quedó protegido "
+                                            "contra doble envío."
+                                        )
 
                         except Exception as exc:
 
