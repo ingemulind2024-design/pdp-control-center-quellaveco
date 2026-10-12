@@ -2884,9 +2884,9 @@ def subir_evidencias(
 # =====================================================
 # CORTE VALIDADO PARA PRESENTACIÓN AL CLIENTE
 # =====================================================
-# Regularización solicitada por contingencia de conectividad.
+# Corte validado para presentación al cliente.
 # Este bloque NO cambia las fechas de los cortes oficiales.
-# Únicamente fija el valor REAL validado para el corte
+# Fija los indicadores actualizados solicitados para el corte
 # 05/10/2026 19:00 y deja visible la trazabilidad en la curva.
 CORTE_CLIENTE_FECHA = pd.Timestamp(
     "2026-10-05 19:00:00"
@@ -2895,24 +2895,42 @@ CORTE_CLIENTE_FECHA = pd.Timestamp(
 CORTE_CLIENTE_DATOS = {
     "ELECTRICIDAD": {
         "plan": 100.0,
-        "real": 86.3,
+        "real": 88.1,
+        "desviacion": -11.9,
+        "spi": 0.88,
         "ots": 101,
         "actividades": 164,
-        "culminadas": 139
+        "culminadas": 142,
+        "en_ejecucion": 9,
+        "no_iniciadas": 13,
+        "hh_plan": 1502,
+        "hh_ganadas": 1260
     },
     "INSTRUMENTACION": {
         "plan": 100.0,
-        "real": 88.8,
+        "real": 89.7,
+        "desviacion": -10.3,
+        "spi": 0.90,
         "ots": 160,
         "actividades": 210,
-        "culminadas": 180
+        "culminadas": 181,
+        "en_ejecucion": 17,
+        "no_iniciadas": 12,
+        "hh_plan": 1520,
+        "hh_ganadas": 1404
     },
     "CONSOLIDADO": {
         "plan": 100.0,
-        "real": 87.7,
+        "real": 89.0,
+        "desviacion": -11.0,
+        "spi": 0.89,
         "ots": 261,
         "actividades": 374,
-        "culminadas": 319
+        "culminadas": 323,
+        "en_ejecucion": 26,
+        "no_iniciadas": 25,
+        "hh_plan": 3022,
+        "hh_ganadas": 2664
     }
 }
 
@@ -3059,9 +3077,14 @@ def mostrar_corte_validado_cliente(
             <span>Vista: <strong>{nombre_vista}</strong></span>
             <span>PLAN <strong style="color:#155EEF;">{corte["plan"]:.1f}%</strong></span>
             <span>REAL <strong style="color:#D92D20;">{corte["real"]:.1f}%</strong></span>
+            <span>Desv. <strong>{corte["desviacion"]:+.1f} pp</strong></span>
+            <span>SPI <strong>{corte["spi"]:.2f}</strong></span>
             <span>OTs <strong>{corte["ots"]}</strong></span>
             <span>Actividades <strong>{corte["actividades"]}</strong></span>
             <span>Culminadas <strong>{corte["culminadas"]}</strong></span>
+            <span>En ejecución <strong>{corte["en_ejecucion"]}</strong></span>
+            <span>No iniciadas <strong>{corte["no_iniciadas"]}</strong></span>
+            <span>HH <strong>{corte["hh_plan"]} / {corte["hh_ganadas"]}</strong></span>
         </div>
         """,
         unsafe_allow_html=True
