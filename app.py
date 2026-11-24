@@ -18217,1325 +18217,1384 @@ else:
 
         mostrar_acceso_pagina(
             f"Registrar avance · {nombre_area}",
-            "Actualice el progreso y deje trazabilidad del trabajo ejecutado.",
+            "Registre el progreso y las evidencias directamente desde la tabla de actividades.",
             icono="+",
             contexto=f"{nombre_rol_sidebar} · CAMPO",
             badge=nombre_area
         )
 
+        st.markdown(
+            """
+            <style>
+            .registro-tabla-ayuda {
+                color:#667085;
+                font-size:.86rem;
+                margin-top:-.25rem;
+                margin-bottom:.8rem;
+            }
+
+            .registro-tabla-head {
+                background:#082D55;
+                color:#FFFFFF;
+                font-weight:800;
+                font-size:.72rem;
+                text-align:center;
+                border-radius:7px;
+                padding:9px 5px;
+                min-height:40px;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                line-height:1.05;
+            }
+
+            .registro-tabla-dato {
+                color:#101828;
+                font-size:.78rem;
+                line-height:1.18;
+                padding-top:9px;
+                overflow-wrap:anywhere;
+            }
+
+            .registro-tabla-dato strong {
+                color:#082D55;
+            }
+
+            .registro-fila-separador {
+                border-bottom:1px solid #D0D5DD;
+                margin:.30rem 0 .65rem 0;
+            }
+
+            [data-testid="stNumberInput"] input {
+                text-align:center;
+            }
+
+            @media (max-width: 768px) {
+                .registro-tabla-head {
+                    font-size:.68rem;
+                }
+                .registro-tabla-dato {
+                    font-size:.74rem;
+                }
+            }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+
+        st.markdown(
+            """
+            <div class="registro-tabla-ayuda">
+                Cada actividad tiene sus propios controles para registrar el porcentaje,
+                descripción, evidencia fotográfica y guardar el avance.
+                Las actividades culminadas al 100% se ocultan automáticamente.
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
         if not ots_area:
+
             st.warning(
-                "Todavía no existen OTs cargadas para esta área."
+                "Todavía no existen OTs cargadas para esta gerencia."
             )
 
         else:
 
-            # ============================================
-            # FILTRO SUPERVISOR + SELECCIÓN DE OT
-            # MISMA LÓGICA DEL APP ANTAPACCAY
-            # ============================================
-
-            ids_ots_area_registro = [
+            ids_ots_registro = [
                 ot["id"]
                 for ot in ots_area
+                if ot.get("id") is not None
             ]
 
-            actividades_area_registro = []
+            actividades_registro = []
 
-            if ids_ots_area_registro:
-                actividades_area_registro = (
+            if ids_ots_registro:
+
+                actividades_registro = (
                     supabase
                     .table("actividades")
                     .select(
-                        "id,ot_id,supervisor,activo"
+                        "id,ot_id,codigo_actividad,descripcion,"
+                        "descripcion_trabajo,operacion,supervisor,"
+                        "especialidad,grupo,inicio_plan,fin_plan,"
+                        "duracion_h,personal,hh_plan,critica,activo"
                     )
                     .in_(
                         "ot_id",
-                        ids_ots_area_registro
+                        ids_ots_registro
                     )
-                    .eq("activo", True)
+                    .eq(
+                        "activo",
+                        True
+                    )
                     .execute()
                 ).data or []
 
-            supervisores_area = sorted(
-                {
-                    str(
-                        actividad_sup.get(
-                            "supervisor",
-                            ""
-                        )
-                    ).strip()
-                    for actividad_sup
-                    in actividades_area_registro
-                    if str(
-                        actividad_sup.get(
-                            "supervisor",
-                            ""
-                        )
-                    ).strip()
-                }
-            )
+            if not actividades_registro:
 
-            col_supervisor, col_ot = st.columns(2)
-
-            with col_supervisor:
-
-                supervisor_seleccionado = st.selectbox(
-                    "Seleccione supervisor",
-                    ["TODOS"] + supervisores_area,
-                    key=(
-                        f"supervisor_registro_"
-                        f"{usuario.get('area_id')}"
-                    )
+                st.info(
+                    "No existen actividades activas para registrar."
                 )
 
-            # ==================================================
-            # REGULARIZACIÓN DE CORTE HISTÓRICO
-            # ==================================================
-            # Solo PLANNER puede retroregistrar un avance.
-            # No cambia la estructura de cortes de la Curva S:
-            # únicamente registra el avance con la fecha/hora
-            # histórica seleccionada para que el REAL del corte
-            # se recalcule correctamente.
-            modo_regularizacion = False
-            fecha_corte_regularizacion = None
-            hora_corte_regularizacion = None
-            fecha_registro_efectiva_utc = None
-            fecha_registro_efectiva_lima = None
-            motivo_regularizacion = ""
+            else:
 
-            if rol == "planner":
-
-                modo_regularizacion = st.checkbox(
-                    "Regularizar un corte anterior",
-                    value=False,
-                    key=(
-                        f"regularizar_corte_"
-                        f"{usuario.get('area_id')}"
-                    ),
-                    help=(
-                        "Use esta opción únicamente para completar "
-                        "avances que no pudieron registrarse en su "
-                        "momento por una contingencia. El avance se "
-                        "asignará al corte histórico seleccionado."
-                    )
+                df_actividades_registro = pd.DataFrame(
+                    actividades_registro
                 )
 
-                if modo_regularizacion:
-
-                    st.warning(
-                        "MODO REGULARIZACIÓN: el avance se registrará "
-                        "con la fecha y hora del corte seleccionado. "
-                        "La fecha/hora del corte NO se modifica; "
-                        "solo se completa el avance REAL faltante."
-                    )
-
-                    reg1, reg2 = st.columns(2)
-
-                    fecha_hoy_lima = (
-                        pd.Timestamp.now(
-                            tz="America/Lima"
-                        ).date()
-                    )
-
-                    fecha_default_regularizacion = (
-                        fecha_hoy_lima
-                        - pd.Timedelta(days=1)
-                    )
-
-                    with reg1:
-                        fecha_corte_regularizacion = st.date_input(
-                            "Fecha del corte",
-                            value=fecha_default_regularizacion,
-                            max_value=fecha_hoy_lima,
-                            key=(
-                                f"fecha_corte_regularizacion_"
-                                f"{usuario.get('area_id')}"
-                            )
-                        )
-
-                    with reg2:
-                        hora_corte_regularizacion = st.selectbox(
-                            "Hora del corte",
-                            [
-                                "00:00",
-                                "07:00",
-                                "14:00",
-                                "19:00"
-                            ],
-                            index=3,
-                            key=(
-                                f"hora_corte_regularizacion_"
-                                f"{usuario.get('area_id')}"
-                            )
-                        )
-
-                    motivo_regularizacion = st.text_input(
-                        "Motivo de regularización",
-                        value="Contingencia de conectividad",
-                        key=(
-                            f"motivo_regularizacion_"
-                            f"{usuario.get('area_id')}"
-                        )
-                    )
-
-                    hora_reg, minuto_reg = [
-                        int(parte)
-                        for parte
-                        in hora_corte_regularizacion.split(":")
+                ids_actividades_registro = (
+                    df_actividades_registro[
+                        "id"
                     ]
-
-                    fecha_registro_efectiva_lima = pd.Timestamp(
-                        year=fecha_corte_regularizacion.year,
-                        month=fecha_corte_regularizacion.month,
-                        day=fecha_corte_regularizacion.day,
-                        hour=hora_reg,
-                        minute=minuto_reg,
-                        tz="America/Lima"
-                    )
-
-                    fecha_registro_efectiva_utc = (
-                        fecha_registro_efectiva_lima
-                        .tz_convert("UTC")
-                    )
-
-                    ahora_lima_regularizacion = pd.Timestamp.now(
-                        tz="America/Lima"
-                    )
-
-                    if (
-                        fecha_registro_efectiva_lima
-                        > ahora_lima_regularizacion
-                    ):
-                        st.error(
-                            "El corte seleccionado está en el futuro. "
-                            "Seleccione un corte anterior."
-                        )
-                        st.stop()
-
-                    st.info(
-                        "Corte a regularizar: "
-                        f"{fecha_registro_efectiva_lima:%d/%m/%Y %H:%M} · "
-                        "La carga quedará trazada como regularización."
-                    )
-
-            # ==================================================
-            # OTs PENDIENTES SEGÚN SUPERVISOR
-            # En Registrar avance se ocultan automáticamente
-            # las OTs que ya llegaron al 100%.
-            #
-            # - Si se selecciona TODOS:
-            #   una OT se retira cuando TODAS sus actividades
-            #   activas están al 100%.
-            #
-            # - Si se selecciona un supervisor:
-            #   una OT se retira cuando TODAS las actividades
-            #   de ESE supervisor dentro de la OT están al 100%.
-            # ==================================================
-
-            ids_actividades_area_registro = [
-                actividad_sup["id"]
-                for actividad_sup in actividades_area_registro
-                if actividad_sup.get("id") is not None
-            ]
-
-            avances_area_registro = []
-
-            if ids_actividades_area_registro:
-
-                avances_area_registro = (
-                    supabase
-                    .table("avances_actividad")
-                    .select(
-                        "actividad_id,avance,fecha_registro"
-                    )
-                    .in_(
-                        "actividad_id",
-                        ids_actividades_area_registro
-                    )
-                    .execute()
-                ).data or []
-
-            df_avances_area_registro = pd.DataFrame(
-                avances_area_registro
-            )
-
-            mapa_ultimo_avance_registro = {}
-
-            if not df_avances_area_registro.empty:
-
-                ultimos_registro = latest_progress(
-                    df_avances_area_registro
+                    .dropna()
+                    .tolist()
                 )
+
+                avances_registro = []
+
+                if ids_actividades_registro:
+
+                    avances_registro = (
+                        supabase
+                        .table("avances_actividad")
+                        .select(
+                            "id,actividad_id,avance,descripcion_avance,"
+                            "observaciones,tipo_evidencia,critica,"
+                            "evidencias,usuario,fecha_registro"
+                        )
+                        .in_(
+                            "actividad_id",
+                            ids_actividades_registro
+                        )
+                        .execute()
+                    ).data or []
+
+                df_avances_registro = pd.DataFrame(
+                    avances_registro
+                )
+
+                ultimos_registro = (
+                    latest_progress(
+                        df_avances_registro
+                    )
+                    if not df_avances_registro.empty
+                    else pd.DataFrame()
+                )
+
+                mapa_avance_actual = {}
 
                 if not ultimos_registro.empty:
 
-                    mapa_ultimo_avance_registro = {
+                    mapa_avance_actual = {
                         fila["actividad_id"]: float(
-                            fila.get("avance", 0) or 0
-                        )
-                        for _, fila
-                        in ultimos_registro.iterrows()
-                    }
-
-            actividades_relevantes_registro = []
-
-            for actividad_sup in actividades_area_registro:
-
-                supervisor_actividad = str(
-                    actividad_sup.get(
-                        "supervisor",
-                        ""
-                    )
-                    or ""
-                ).strip()
-
-                if (
-                    supervisor_seleccionado != "TODOS"
-                    and supervisor_actividad
-                    != supervisor_seleccionado
-                ):
-                    continue
-
-                actividad_copia = dict(
-                    actividad_sup
-                )
-
-                actividad_copia[
-                    "_avance_real"
-                ] = float(
-                    mapa_ultimo_avance_registro.get(
-                        actividad_sup.get("id"),
-                        0
-                    )
-                    or 0
-                )
-
-                actividades_relevantes_registro.append(
-                    actividad_copia
-                )
-
-            ids_ot_con_actividades = {
-                actividad_sup.get("ot_id")
-                for actividad_sup
-                in actividades_relevantes_registro
-                if actividad_sup.get("ot_id") is not None
-            }
-
-            ids_ot_pendientes = set()
-
-            for ot_id_registro in ids_ot_con_actividades:
-
-                actividades_ot_registro = [
-                    actividad_sup
-                    for actividad_sup
-                    in actividades_relevantes_registro
-                    if actividad_sup.get("ot_id")
-                    == ot_id_registro
-                ]
-
-                # La OT queda disponible si al menos una actividad
-                # del alcance seleccionado todavía está por debajo de 100%.
-                if any(
-                    float(
-                        actividad_sup.get(
-                            "_avance_real",
-                            0
-                        )
-                        or 0
-                    ) < 100
-                    for actividad_sup
-                    in actividades_ot_registro
-                ):
-
-                    ids_ot_pendientes.add(
-                        ot_id_registro
-                    )
-
-            if modo_regularizacion:
-
-                # Para corregir un corte histórico se deben poder
-                # seleccionar también OTs que HOY ya están al 100%,
-                # porque pudieron haber estado pendientes en el corte.
-                ots_filtradas_registro = [
-                    ot
-                    for ot in ots_area
-                    if ot.get("id")
-                    in ids_ot_con_actividades
-                ]
-
-            else:
-
-                ots_filtradas_registro = [
-                    ot
-                    for ot in ots_area
-                    if ot.get("id")
-                    in ids_ot_pendientes
-                ]
-
-            total_ots_alcance_registro = len(
-                {
-                    ot.get("id")
-                    for ot in ots_area
-                    if ot.get("id") in ids_ot_con_actividades
-                }
-            )
-
-            total_ots_completadas_ocultas = max(
-                0,
-                total_ots_alcance_registro
-                - len(ots_filtradas_registro)
-            )
-
-            mapa_ots = {
-                (
-                    f"{ot['ot']} - "
-                    f"{ot.get('equipo') or 'Sin equipo'}"
-                ): ot
-                for ot in ots_filtradas_registro
-            }
-
-            with col_ot:
-
-                ot_texto = st.selectbox(
-                    "Escriba o seleccione la OT *",
-                    list(mapa_ots.keys()),
-                    index=None,
-                    placeholder="Buscar OT...",
-                    key=(
-                        f"ot_registro_"
-                        f"{usuario.get('area_id')}_"
-                        f"{supervisor_seleccionado}"
-                    )
-                )
-
-            if modo_regularizacion:
-
-                st.caption(
-                    "Regularización histórica · "
-                    f"{len(ots_filtradas_registro)} OT(s) "
-                    "del alcance disponibles, incluyendo OTs "
-                    "que actualmente ya estén al 100%."
-                )
-
-            elif supervisor_seleccionado == "TODOS":
-
-                st.caption(
-                    f"OTs pendientes disponibles: "
-                    f"{len(ots_filtradas_registro)} · "
-                    f"OTs al 100% ocultas: "
-                    f"{total_ots_completadas_ocultas}."
-                )
-
-            else:
-
-                st.caption(
-                    f"OTs pendientes de "
-                    f"{supervisor_seleccionado}: "
-                    f"{len(ots_filtradas_registro)} · "
-                    f"OTs al 100% ocultas: "
-                    f"{total_ots_completadas_ocultas}."
-                )
-
-            if not mapa_ots:
-
-                if modo_regularizacion:
-                    st.warning(
-                        "No existen OTs disponibles para "
-                        "regularizar en el alcance seleccionado."
-                    )
-                else:
-                    st.success(
-                        "No quedan OTs pendientes para "
-                        "el supervisor seleccionado. "
-                        "Todas las OTs de su alcance están al 100%."
-                    )
-
-                st.stop()
-
-            if not ot_texto:
-
-                st.info(
-                    "Seleccione una OT para continuar."
-                )
-                st.stop()
-
-            ot_seleccionada = mapa_ots[ot_texto]
-
-            st.info(
-                f"Equipo: "
-                f"{ot_seleccionada.get('equipo') or 'Sin equipo'}"
-            )
-
-            # ============================================
-            # OBTENER ACTIVIDADES DE LA OT
-            # ============================================
-
-            actividades_resultado = (
-                supabase
-                .table("actividades")
-                .select(
-                    "id,codigo_actividad,descripcion,descripcion_trabajo,"
-                    "operacion,ssoma,supervisor,especialidad,grupo,peso,"
-                    "inicio_plan,fin_plan,"
-                    "seccion,personal,duracion_h,hh_plan,critica,activo"
-                )
-                .eq(
-                    "ot_id",
-                    ot_seleccionada["id"]
-                )
-                .eq("activo", True)
-                .order("codigo_actividad")
-                .execute()
-            )
-
-            actividades_ot = (
-                actividades_resultado.data
-                or []
-            )
-
-            # Si se seleccionó un supervisor específico,
-            # mostrar únicamente sus actividades dentro de la OT.
-            if supervisor_seleccionado != "TODOS":
-
-                actividades_ot = [
-                    actividad_ot
-                    for actividad_ot in actividades_ot
-                    if str(
-                        actividad_ot.get(
-                            "supervisor",
-                            ""
-                        )
-                    ).strip()
-                    == supervisor_seleccionado
-                ]
-
-            if not actividades_ot:
-
-                st.warning(
-                    "Esta OT no tiene actividades registradas."
-                )
-
-            else:
-
-                mapa_actividades = {
-                    f"{act['codigo_actividad']} - {act['descripcion']}": act
-                    for act in actividades_ot
-                }
-
-                actividad_texto = st.selectbox(
-                    "Seleccione una actividad",
-                    list(mapa_actividades.keys()),
-                    key=f"selector_actividad_ot_{ot_seleccionada['id']}"
-                )
-
-                actividad = mapa_actividades[actividad_texto]
-
-                st.divider()
-
-                # ============================================
-                # DATOS PLANIFICADOS
-                # ============================================
-
-                c1, c2, c3, c4 = st.columns(4)
-
-                with c1:
-                    st.text_input(
-                        "Supervisor",
-                        value=str(actividad.get("supervisor") or ""),
-                        disabled=True
-                    )
-
-                with c2:
-                    st.text_input(
-                        "Especialidad",
-                        value=str(actividad.get("especialidad") or ""),
-                        disabled=True
-                    )
-
-                with c3:
-                    st.text_input(
-                        "Grupo",
-                        value=str(actividad.get("grupo") or ""),
-                        disabled=True
-                    )
-
-                with c4:
-                    st.text_input(
-                        "Sección",
-                        value=str(actividad.get("seccion") or ""),
-                        disabled=True
-                    )
-
-                c5, c6, c7, c8 = st.columns(4)
-
-                with c5:
-                    st.text_input(
-                        "Inicio planificado",
-                        value=str(actividad.get("inicio_plan") or ""),
-                        disabled=True
-                    )
-
-                with c6:
-                    st.text_input(
-                        "Fin planificado",
-                        value=str(actividad.get("fin_plan") or ""),
-                        disabled=True
-                    )
-
-                with c7:
-                    st.text_input(
-                        "Personal",
-                        value=str(actividad.get("personal") or ""),
-                        disabled=True
-                    )
-
-                with c8:
-                    st.text_input(
-                        "HH planificadas",
-                        value=str(actividad.get("hh_plan") or ""),
-                        disabled=True
-                    )
-
-                st.text_area(
-                    "Descripción de actividad",
-                    value=str(actividad.get("descripcion") or ""),
-                    disabled=True
-                )
-
-                dt1, dt2 = st.columns(2)
-
-                with dt1:
-                    st.text_area(
-                        "Descripción de trabajo",
-                        value=str(actividad.get("descripcion_trabajo") or ""),
-                        disabled=True
-                    )
-
-                with dt2:
-                    st.text_area(
-                        "Operación",
-                        value=str(actividad.get("operacion") or ""),
-                        disabled=True
-                    )
-
-                st.text_area(
-                    "SSOMA",
-                    value=str(actividad.get("ssoma") or ""),
-                    disabled=True
-                )
-
-                st.divider()
-
-                # ============================================
-                # FORMULARIO DE AVANCE
-                # ============================================
-
-                # Obtener el último avance GUARDADO de la actividad
-                # seleccionada. Así, al cambiar de actividad, el campo
-                # no hereda el porcentaje de la actividad anterior.
-                consulta_ultimo_avance = (
-                    supabase
-                    .table("avances_actividad")
-                    .select("avance,fecha_registro")
-                    .eq(
-                        "actividad_id",
-                        actividad["id"]
-                    )
-                )
-
-                if (
-                    modo_regularizacion
-                    and fecha_registro_efectiva_utc
-                    is not None
-                ):
-
-                    consulta_ultimo_avance = (
-                        consulta_ultimo_avance
-                        .lte(
-                            "fecha_registro",
-                            fecha_registro_efectiva_utc.isoformat()
-                        )
-                    )
-
-                ultimo_avance_resultado = (
-                    consulta_ultimo_avance
-                    .order(
-                        "fecha_registro",
-                        desc=True
-                    )
-                    .limit(1)
-                    .execute()
-                )
-
-                ultimo_avance_data = (
-                    ultimo_avance_resultado.data
-                    or []
-                )
-
-                ultimo_avance_guardado = (
-                    int(
-                        float(
-                            ultimo_avance_data[0].get(
+                            fila.get(
                                 "avance",
                                 0
                             )
                             or 0
                         )
+                        for _, fila
+                        in ultimos_registro.iterrows()
+                    }
+
+                df_actividades_registro[
+                    "avance_actual"
+                ] = (
+                    df_actividades_registro[
+                        "id"
+                    ]
+                    .map(
+                        mapa_avance_actual
                     )
-                    if ultimo_avance_data
-                    else 0
+                    .fillna(0)
+                    .astype(float)
+                    .clip(0, 100)
                 )
 
-                if modo_regularizacion:
+                mapa_ot_registro = {
+                    ot["id"]: ot
+                    for ot in ots_area
+                }
 
-                    st.caption(
-                        "Avance conocido hasta el corte "
-                        f"{fecha_registro_efectiva_lima:%d/%m/%Y %H:%M}: "
-                        f"{ultimo_avance_guardado}%"
-                    )
-
-                else:
-
-                    st.caption(
-                        f"Último avance registrado de esta actividad: "
-                        f"{ultimo_avance_guardado}%"
-                    )
-
-                avance = st.number_input(
-                    "Porcentaje de avance de la actividad (%)",
-                    min_value=0,
-                    max_value=100,
-                    value=ultimo_avance_guardado,
-                    step=5,
-                    key=f"avance_actividad_{actividad['id']}"
-                )
-
-                tipo_evidencia = st.selectbox(
-                    "Tipo de evidencia",
-                    [
-                        "INICIO",
-                        "DURANTE",
-                        "FINAL"
-                    ],
-                    key=f"tipo_evidencia_{actividad['id']}"
-                )
-
-                critica = st.checkbox(
-                    "Marcar actividad como crítica",
-                    key=f"critica_actividad_{actividad['id']}"
-                )
-
-                descripcion_avance = st.text_area(
-                    "Descripción breve del avance realizado *",
-                    key=f"descripcion_avance_{actividad['id']}"
-                )
-
-                observaciones = st.text_area(
-                    "Observaciones",
-                    key=f"observaciones_avance_{actividad['id']}"
-                )
-
-                archivos_evidencia = st.file_uploader(
-                    "Evidencias fotográficas",
-                    type=["jpg", "jpeg", "png", "webp"],
-                    accept_multiple_files=True,
-                    key=f"evidencias_actividad_{actividad['id']}",
-                    help=(
-                        "Puede tomar fotografías desde el celular "
-                        "o seleccionarlas desde la PC. "
-                        "Las imágenes se comprimirán automáticamente."
-                    )
-                )
-
-                if archivos_evidencia:
-
-                    st.caption(
-                        f"{len(archivos_evidencia)} "
-                        "fotografía(s) seleccionada(s)."
-                    )
-
-                # ============================================
-                # PROTECCIÓN CONTRA DOBLE REGISTRO
-                # ============================================
-                # Creamos una huella del contenido actual.
-                # Si el usuario vuelve a presionar Guardar sin
-                # modificar nada, NO se inserta un segundo registro.
-                nombres_evidencias_actuales = sorted(
-                    [
-                        str(
-                            getattr(
-                                archivo,
-                                "name",
+                df_actividades_registro[
+                    "OT"
+                ] = (
+                    df_actividades_registro[
+                        "ot_id"
+                    ]
+                    .map(
+                        lambda valor: str(
+                            mapa_ot_registro.get(
+                                valor,
+                                {}
+                            ).get(
+                                "ot",
                                 ""
                             )
                             or ""
                         )
-                        for archivo in (
-                            archivos_evidencia
-                            or []
-                        )
-                    ]
+                    )
                 )
 
-                tamanos_evidencias_actuales = sorted(
-                    [
-                        int(
-                            getattr(
-                                archivo,
-                                "size",
-                                0
+                df_actividades_registro[
+                    "EQUIPO"
+                ] = (
+                    df_actividades_registro[
+                        "ot_id"
+                    ]
+                    .map(
+                        lambda valor: str(
+                            mapa_ot_registro.get(
+                                valor,
+                                {}
+                            ).get(
+                                "equipo",
+                                ""
                             )
-                            or 0
+                            or ""
                         )
-                        for archivo in (
-                            archivos_evidencia
-                            or []
-                        )
+                    )
+                )
+
+                # =========================================
+                # SOLO PENDIENTES
+                # =========================================
+                df_actividades_registro = (
+                    df_actividades_registro[
+                        df_actividades_registro[
+                            "avance_actual"
+                        ] < 100
                     ]
+                    .copy()
                 )
 
-                identificador_corte_huella = (
-                    fecha_registro_efectiva_utc.isoformat()
+                if df_actividades_registro.empty:
+
+                    st.success(
+                        "Todas las actividades de esta gerencia están al 100%."
+                    )
+
+                else:
+
+                    supervisores = sorted(
+                        {
+                            str(
+                                valor
+                                or ""
+                            ).strip()
+                            for valor
+                            in df_actividades_registro[
+                                "supervisor"
+                            ].tolist()
+                            if str(
+                                valor
+                                or ""
+                            ).strip()
+                        }
+                    )
+
+                    grupos = sorted(
+                        {
+                            str(
+                                valor
+                                or ""
+                            ).strip()
+                            for valor
+                            in df_actividades_registro[
+                                "grupo"
+                            ].tolist()
+                            if str(
+                                valor
+                                or ""
+                            ).strip()
+                        }
+                    )
+
+                    ots_disponibles = sorted(
+                        {
+                            str(
+                                valor
+                                or ""
+                            ).strip()
+                            for valor
+                            in df_actividades_registro[
+                                "OT"
+                            ].tolist()
+                            if str(
+                                valor
+                                or ""
+                            ).strip()
+                        }
+                    )
+
+                    f1, f2, f3, f4 = st.columns(
+                        [1.1, 1.1, 1.35, .62]
+                    )
+
+                    with f1:
+
+                        filtro_supervisor_tabla = st.selectbox(
+                            "Supervisor",
+                            ["TODOS"] + supervisores,
+                            key=(
+                                "tabla_avance_supervisor_"
+                                f"{usuario.get('area_id')}"
+                            )
+                        )
+
+                    with f2:
+
+                        filtro_grupo_tabla = st.selectbox(
+                            "Grupo",
+                            ["TODOS"] + grupos,
+                            key=(
+                                "tabla_avance_grupo_"
+                                f"{usuario.get('area_id')}"
+                            )
+                        )
+
+                    with f3:
+
+                        filtro_ot_tabla = st.selectbox(
+                            "OT",
+                            ["TODAS"] + ots_disponibles,
+                            key=(
+                                "tabla_avance_ot_"
+                                f"{usuario.get('area_id')}"
+                            )
+                        )
+
+                    with f4:
+
+                        st.write("")
+                        st.write("")
+
+                        limpiar_filtros = st.button(
+                            "Limpiar filtros",
+                            use_container_width=True,
+                            key=(
+                                "tabla_avance_limpiar_"
+                                f"{usuario.get('area_id')}"
+                            )
+                        )
+
+                    if limpiar_filtros:
+
+                        for clave in [
+                            (
+                                "tabla_avance_supervisor_"
+                                f"{usuario.get('area_id')}"
+                            ),
+                            (
+                                "tabla_avance_grupo_"
+                                f"{usuario.get('area_id')}"
+                            ),
+                            (
+                                "tabla_avance_ot_"
+                                f"{usuario.get('area_id')}"
+                            ),
+                            (
+                                "tabla_avance_buscar_"
+                                f"{usuario.get('area_id')}"
+                            )
+                        ]:
+                            st.session_state.pop(
+                                clave,
+                                None
+                            )
+
+                        st.rerun()
+
+                    buscar_actividad = st.text_input(
+                        "🔎 Buscar actividad, OT, grupo, equipo o supervisor",
+                        placeholder=(
+                            "Ej.: GB-001, 401..., G1, almacén, apellido del supervisor..."
+                        ),
+                        key=(
+                            "tabla_avance_buscar_"
+                            f"{usuario.get('area_id')}"
+                        )
+                    )
+
+                    df_tabla = (
+                        df_actividades_registro.copy()
+                    )
+
                     if (
-                        modo_regularizacion
-                        and fecha_registro_efectiva_utc
-                        is not None
-                    )
-                    else "REGISTRO_ACTUAL"
-                )
+                        filtro_supervisor_tabla
+                        != "TODOS"
+                    ):
 
-                contenido_huella_avance = "|".join([
-                    str(actividad["id"]),
-                    identificador_corte_huella,
-                    str(int(avance)),
-                    str(tipo_evidencia),
-                    str(bool(critica)),
-                    descripcion_avance.strip(),
-                    observaciones.strip(),
-                    str(motivo_regularizacion or "").strip(),
-                    ",".join(
-                        nombres_evidencias_actuales
-                    ),
-                    ",".join(
-                        str(valor)
-                        for valor
-                        in tamanos_evidencias_actuales
-                    )
-                ])
+                        df_tabla = df_tabla[
+                            df_tabla[
+                                "supervisor"
+                            ]
+                            .fillna("")
+                            .astype(str)
+                            .str.strip()
+                            .eq(
+                                filtro_supervisor_tabla
+                            )
+                        ]
 
-                huella_avance_actual = (
-                    hashlib.sha256(
-                        contenido_huella_avance.encode(
-                            "utf-8"
-                        )
-                    ).hexdigest()
-                )
+                    if (
+                        filtro_grupo_tabla
+                        != "TODOS"
+                    ):
 
-                clave_huella_guardada = (
-                    f"avance_guardado_huella_"
-                    f"{actividad['id']}"
-                )
+                        df_tabla = df_tabla[
+                            df_tabla[
+                                "grupo"
+                            ]
+                            .fillna("")
+                            .astype(str)
+                            .str.strip()
+                            .eq(
+                                filtro_grupo_tabla
+                            )
+                        ]
 
-                registro_ya_guardado = (
-                    st.session_state.get(
-                        clave_huella_guardada
-                    )
-                    == huella_avance_actual
-                )
+                    if (
+                        filtro_ot_tabla
+                        != "TODAS"
+                    ):
 
-                clave_boton_guardar = (
-                    f"guardar_avance_"
-                    f"{actividad['id']}"
-                )
+                        df_tabla = df_tabla[
+                            df_tabla[
+                                "OT"
+                            ].eq(
+                                filtro_ot_tabla
+                            )
+                        ]
 
-                # Cuando el mismo registro ya fue cargado,
-                # el botón se muestra en VERDE.
-                if registro_ya_guardado:
+                    texto_busqueda = str(
+                        buscar_actividad
+                        or ""
+                    ).strip().lower()
 
-                    st.markdown(
-                        f"""
-                        <style>
-                        .st-key-{clave_boton_guardar} button {{
-                            background: linear-gradient(
-                                135deg,
-                                #12B76A 0%,
-                                #079455 100%
-                            ) !important;
-                            border-color: #079455 !important;
-                            color: #FFFFFF !important;
-                            box-shadow:
-                                0 7px 18px
-                                rgba(18,183,106,.22) !important;
-                        }}
+                    if texto_busqueda:
 
-                        .st-key-{clave_boton_guardar} button:hover {{
-                            background: linear-gradient(
-                                135deg,
-                                #0E9F5B 0%,
-                                #067647 100%
-                            ) !important;
-                            border-color: #067647 !important;
-                            color: #FFFFFF !important;
-                        }}
-                        </style>
-                        """,
-                        unsafe_allow_html=True
-                    )
-
-                guardar = st.button(
-                    (
-                        "✓ Avance guardado"
-                        if registro_ya_guardado
-                        else "Guardar avance"
-                    ),
-                    type="primary",
-                    use_container_width=True,
-                    key=clave_boton_guardar
-                )
-
-                if guardar:
-
-                    # ----------------------------------------
-                    # 1. Bloqueo inmediato de segundo clic
-                    # ----------------------------------------
-                    if registro_ya_guardado:
-
-                        st.warning(
-                            "Este registro ya ha sido cargado. "
-                            "Para registrar un nuevo avance, "
-                            "modifique el porcentaje, la descripción, "
-                            "las observaciones, el tipo de evidencia "
-                            "o los archivos adjuntos."
+                        mascara_busqueda = pd.Series(
+                            False,
+                            index=df_tabla.index
                         )
 
-                    elif not descripcion_avance.strip():
+                        for columna_busqueda in [
+                            "OT",
+                            "EQUIPO",
+                            "grupo",
+                            "codigo_actividad",
+                            "descripcion",
+                            "descripcion_trabajo",
+                            "operacion",
+                            "supervisor"
+                        ]:
 
-                        st.error(
-                            "Debe ingresar una descripción del avance."
+                            if (
+                                columna_busqueda
+                                in df_tabla.columns
+                            ):
+
+                                mascara_busqueda = (
+                                    mascara_busqueda
+                                    | df_tabla[
+                                        columna_busqueda
+                                    ]
+                                    .fillna("")
+                                    .astype(str)
+                                    .str.lower()
+                                    .str.contains(
+                                        texto_busqueda,
+                                        regex=False
+                                    )
+                                )
+
+                        df_tabla = df_tabla[
+                            mascara_busqueda
+                        ]
+
+                    df_tabla = (
+                        df_tabla
+                        .sort_values(
+                            [
+                                "OT",
+                                "grupo",
+                                "inicio_plan",
+                                "codigo_actividad"
+                            ],
+                            na_position="last"
+                        )
+                    )
+
+                    st.caption(
+                        f"{len(df_tabla)} actividad(es) pendiente(s). "
+                        "Use los filtros para encontrar rápidamente una actividad."
+                    )
+
+                    if df_tabla.empty:
+
+                        st.info(
+                            "No se encontraron actividades pendientes con los filtros seleccionados."
                         )
 
                     else:
 
-                        try:
+                        # =====================================
+                        # PAGINACIÓN
+                        # =====================================
+                        p1, p2 = st.columns(
+                            [1, 3]
+                        )
 
-                            # --------------------------------
-                            # 2. Protección adicional en BD
-                            # --------------------------------
-                            # Si por latencia o doble clic llega una
-                            # segunda petición casi al mismo tiempo,
-                            # verificamos el último registro de esta
-                            # actividad y usuario antes de subir fotos
-                            # o insertar nuevamente.
-                            consulta_duplicado = (
-                                supabase
-                                .table("avances_actividad")
-                                .select(
-                                    "avance,descripcion_avance,"
-                                    "observaciones,tipo_evidencia,"
-                                    "critica,evidencias,usuario,"
-                                    "fecha_registro"
-                                )
-                                .eq(
-                                    "actividad_id",
-                                    actividad["id"]
-                                )
-                                .eq(
-                                    "usuario",
-                                    usuario["username"]
+                        with p1:
+
+                            filas_por_pagina = st.selectbox(
+                                "Filas por página",
+                                [
+                                    10,
+                                    20,
+                                    30,
+                                    50
+                                ],
+                                index=1,
+                                key=(
+                                    "tabla_avance_filas_"
+                                    f"{usuario.get('area_id')}"
                                 )
                             )
 
-                            if (
-                                modo_regularizacion
-                                and fecha_registro_efectiva_utc
-                                is not None
-                            ):
+                        total_paginas = max(
+                            1,
+                            (
+                                len(df_tabla)
+                                + filas_por_pagina
+                                - 1
+                            )
+                            // filas_por_pagina
+                        )
 
-                                inicio_ventana_corte = (
-                                    fecha_registro_efectiva_utc
-                                    - pd.Timedelta(seconds=1)
-                                ).isoformat()
+                        with p2:
 
-                                fin_ventana_corte = (
-                                    fecha_registro_efectiva_utc
-                                    + pd.Timedelta(seconds=1)
-                                ).isoformat()
-
-                                consulta_duplicado = (
-                                    consulta_duplicado
-                                    .gte(
-                                        "fecha_registro",
-                                        inicio_ventana_corte
-                                    )
-                                    .lte(
-                                        "fecha_registro",
-                                        fin_ventana_corte
-                                    )
+                            pagina_tabla = st.number_input(
+                                "Página",
+                                min_value=1,
+                                max_value=total_paginas,
+                                value=1,
+                                step=1,
+                                key=(
+                                    "tabla_avance_pagina_"
+                                    f"{usuario.get('area_id')}"
                                 )
-
-                            ultimo_registro_duplicado = (
-                                consulta_duplicado
-                                .order(
-                                    "fecha_registro",
-                                    desc=True
-                                )
-                                .limit(1)
-                                .execute()
                             )
 
-                            datos_ultimo_duplicado = (
-                                ultimo_registro_duplicado.data
-                                or []
+                        inicio_fila = (
+                            int(
+                                pagina_tabla
+                            )
+                            - 1
+                        ) * filas_por_pagina
+
+                        fin_fila = (
+                            inicio_fila
+                            + filas_por_pagina
+                        )
+
+                        df_visible = (
+                            df_tabla.iloc[
+                                inicio_fila:fin_fila
+                            ]
+                        )
+
+                        st.caption(
+                            f"Página {int(pagina_tabla)} de {total_paginas} · "
+                            f"mostrando {len(df_visible)} de {len(df_tabla)} actividades."
+                        )
+
+                        # =====================================
+                        # ENCABEZADO DE LA TABLA
+                        # =====================================
+                        columnas_tabla = [
+                            .78,   # OT
+                            .68,   # Grupo
+                            2.15,  # Actividad
+                            1.05,  # Supervisor
+                            1.05,  # Inicio
+                            1.05,  # Fin
+                            .62,   # Dur.
+                            .70,   # Actual
+                            .78,   # Nuevo
+                            2.05,  # Descripción
+                            .92,   # Tipo
+                            1.12,  # Foto
+                            .62,   # Guardar
+                            .55    # Ver
+                        ]
+
+                        encabezados = [
+                            "OT",
+                            "GRUPO",
+                            "ACTIVIDAD",
+                            "SUPERVISOR",
+                            "INICIO",
+                            "FIN",
+                            "DUR.",
+                            "% ACTUAL",
+                            "% NUEVO",
+                            "DESCRIPCIÓN DEL AVANCE",
+                            "TIPO",
+                            "FOTO",
+                            "GUARDAR",
+                            "VER"
+                        ]
+
+                        cols_head = st.columns(
+                            columnas_tabla,
+                            gap="small"
+                        )
+
+                        for col_head, titulo_head in zip(
+                            cols_head,
+                            encabezados
+                        ):
+
+                            col_head.markdown(
+                                (
+                                    '<div class="registro-tabla-head">'
+                                    f"{titulo_head}"
+                                    "</div>"
+                                ),
+                                unsafe_allow_html=True
                             )
 
-                            duplicado_reciente = False
+                        # =====================================
+                        # FILAS EDITABLES
+                        # =====================================
+                        for _, fila in df_visible.iterrows():
 
-                            if datos_ultimo_duplicado:
+                            actividad_id = int(
+                                fila["id"]
+                            )
 
-                                ultimo = (
-                                    datos_ultimo_duplicado[0]
+                            ot_texto = str(
+                                fila.get(
+                                    "OT",
+                                    ""
                                 )
+                                or ""
+                            )
 
-                                fecha_ultimo = pd.to_datetime(
-                                    ultimo.get(
-                                        "fecha_registro"
-                                    ),
-                                    errors="coerce",
-                                    utc=True
+                            grupo_texto = str(
+                                fila.get(
+                                    "grupo",
+                                    ""
                                 )
+                                or "-"
+                            )
 
-                                ahora_utc = pd.Timestamp.now(
-                                    tz="UTC"
+                            supervisor_texto = str(
+                                fila.get(
+                                    "supervisor",
+                                    ""
                                 )
+                                or "-"
+                            )
 
-                                if modo_regularizacion:
-
-                                    dentro_ventana = bool(
-                                        pd.notna(fecha_ultimo)
-                                        and fecha_registro_efectiva_utc
-                                        is not None
-                                        and abs(
-                                            fecha_ultimo
-                                            - fecha_registro_efectiva_utc
-                                        )
-                                        <= pd.Timedelta(
-                                            seconds=1
-                                        )
-                                    )
-
-                                else:
-
-                                    dentro_ventana = (
-                                        pd.notna(fecha_ultimo)
-                                        and (
-                                            ahora_utc
-                                            - fecha_ultimo
-                                        )
-                                        <= pd.Timedelta(
-                                            minutes=5
-                                        )
-                                    )
-
-                                evidencias_ultimo = (
-                                    ultimo.get(
-                                        "evidencias"
-                                    )
-                                    or []
+                            codigo_actividad = str(
+                                fila.get(
+                                    "codigo_actividad",
+                                    ""
                                 )
+                                or ""
+                            )
 
-                                nombres_evidencias_ultimo = (
-                                    sorted(
-                                        [
-                                            str(
-                                                evidencia.get(
-                                                    "nombre_original",
-                                                    ""
-                                                )
-                                                or ""
-                                            )
-                                            for evidencia
-                                            in evidencias_ultimo
-                                            if isinstance(
-                                                evidencia,
-                                                dict
-                                            )
-                                        ]
-                                    )
+                            descripcion_actividad = str(
+                                fila.get(
+                                    "operacion",
+                                    ""
                                 )
+                                or fila.get(
+                                    "descripcion",
+                                    ""
+                                )
+                                or fila.get(
+                                    "descripcion_trabajo",
+                                    ""
+                                )
+                                or ""
+                            )
 
-                                duplicado_reciente = bool(
-                                    dentro_ventana
-                                    and float(
-                                        ultimo.get(
-                                            "avance",
+                            inicio_plan = pd.to_datetime(
+                                fila.get(
+                                    "inicio_plan"
+                                ),
+                                errors="coerce"
+                            )
+
+                            fin_plan = pd.to_datetime(
+                                fila.get(
+                                    "fin_plan"
+                                ),
+                                errors="coerce"
+                            )
+
+                            inicio_texto = (
+                                inicio_plan.strftime(
+                                    "%d/%m/%y %H:%M"
+                                )
+                                if pd.notna(
+                                    inicio_plan
+                                )
+                                else "-"
+                            )
+
+                            fin_texto = (
+                                fin_plan.strftime(
+                                    "%d/%m/%y %H:%M"
+                                )
+                                if pd.notna(
+                                    fin_plan
+                                )
+                                else "-"
+                            )
+
+                            duracion_texto = (
+                                f"{float(fila.get('duracion_h', 0) or 0):.1f}"
+                            )
+
+                            avance_actual = int(
+                                round(
+                                    float(
+                                        fila.get(
+                                            "avance_actual",
                                             0
                                         )
                                         or 0
                                     )
-                                    == float(avance)
-                                    and str(
-                                        ultimo.get(
-                                            "descripcion_avance",
-                                            ""
-                                        )
-                                        or ""
-                                    ).strip()
-                                    == descripcion_avance.strip()
-                                    and str(
-                                        ultimo.get(
-                                            "observaciones",
-                                            ""
-                                        )
-                                        or ""
-                                    ).strip()
-                                    == observaciones.strip()
-                                    and str(
-                                        ultimo.get(
-                                            "tipo_evidencia",
-                                            ""
-                                        )
-                                        or ""
-                                    )
-                                    == str(
-                                        tipo_evidencia
-                                    )
-                                    and bool(
-                                        ultimo.get(
-                                            "critica",
-                                            False
-                                        )
-                                    )
-                                    == bool(critica)
-                                    and (
-                                        nombres_evidencias_ultimo
-                                        == nombres_evidencias_actuales
-                                    )
                                 )
+                            )
 
-                            if duplicado_reciente:
+                            c_ot, c_grupo, c_act, c_sup, c_ini, c_fin, c_dur, c_actual, c_nuevo, c_desc, c_tipo, c_foto, c_guardar, c_ver = st.columns(
+                                columnas_tabla,
+                                gap="small"
+                            )
 
-                                st.session_state[
-                                    clave_huella_guardada
-                                ] = huella_avance_actual
+                            c_ot.markdown(
+                                (
+                                    '<div class="registro-tabla-dato">'
+                                    f"<strong>{ot_texto}</strong>"
+                                    "</div>"
+                                ),
+                                unsafe_allow_html=True
+                            )
 
-                                st.markdown(
-                                    f"""
-                                    <style>
-                                    .st-key-{clave_boton_guardar} button {{
-                                        background:
-                                            #079455 !important;
-                                        border-color:
-                                            #079455 !important;
-                                        color:
-                                            #FFFFFF !important;
-                                    }}
-                                    </style>
+                            c_grupo.markdown(
+                                (
+                                    '<div class="registro-tabla-dato">'
+                                    f"<strong>{grupo_texto}</strong>"
+                                    "</div>"
+                                ),
+                                unsafe_allow_html=True
+                            )
+
+                            c_act.markdown(
+                                (
+                                    '<div class="registro-tabla-dato">'
+                                    f"<strong>{codigo_actividad}</strong><br>"
+                                    f"{descripcion_actividad}"
+                                    "</div>"
+                                ),
+                                unsafe_allow_html=True
+                            )
+
+                            c_sup.markdown(
+                                (
+                                    '<div class="registro-tabla-dato">'
+                                    f"{supervisor_texto}"
+                                    "</div>"
+                                ),
+                                unsafe_allow_html=True
+                            )
+
+                            c_ini.markdown(
+                                (
+                                    '<div class="registro-tabla-dato">'
+                                    f"{inicio_texto}"
+                                    "</div>"
+                                ),
+                                unsafe_allow_html=True
+                            )
+
+                            c_fin.markdown(
+                                (
+                                    '<div class="registro-tabla-dato">'
+                                    f"{fin_texto}"
+                                    "</div>"
+                                ),
+                                unsafe_allow_html=True
+                            )
+
+                            c_dur.markdown(
+                                (
+                                    '<div class="registro-tabla-dato">'
+                                    f"{duracion_texto}"
+                                    "</div>"
+                                ),
+                                unsafe_allow_html=True
+                            )
+
+                            c_actual.markdown(
+                                (
+                                    '<div class="registro-tabla-dato" '
+                                    'style="text-align:center;font-weight:800;">'
+                                    f"{avance_actual}%"
+                                    "</div>"
+                                ),
+                                unsafe_allow_html=True
+                            )
+
+                            avance_nuevo = c_nuevo.number_input(
+                                "% nuevo",
+                                min_value=0,
+                                max_value=100,
+                                value=avance_actual,
+                                step=1,
+                                key=(
+                                    "tabla_nuevo_"
+                                    f"{actividad_id}"
+                                ),
+                                label_visibility="collapsed"
+                            )
+
+                            descripcion_nueva = c_desc.text_area(
+                                "Descripción",
+                                placeholder=(
+                                    "Describa el avance realizado..."
+                                ),
+                                height=72,
+                                key=(
+                                    "tabla_descripcion_"
+                                    f"{actividad_id}"
+                                ),
+                                label_visibility="collapsed"
+                            )
+
+                            tipo_evidencia_nuevo = c_tipo.selectbox(
+                                "Tipo",
+                                [
+                                    "INICIO",
+                                    "DURANTE",
+                                    "FINAL"
+                                ],
+                                index=(
+                                    0
+                                    if avance_actual <= 0
+                                    else (
+                                        2
+                                        if int(
+                                            avance_nuevo
+                                        ) >= 100
+                                        else 1
+                                    )
+                                ),
+                                key=(
+                                    "tabla_tipo_"
+                                    f"{actividad_id}"
+                                ),
+                                label_visibility="collapsed"
+                            )
+
+                            with c_foto:
+
+                                with st.popover(
+                                    "📷 Cargar"
+                                ):
+
+                                    archivos_fila = st.file_uploader(
+                                        "Evidencias",
+                                        type=[
+                                            "jpg",
+                                            "jpeg",
+                                            "png",
+                                            "webp"
+                                        ],
+                                        accept_multiple_files=True,
+                                        key=(
+                                            "tabla_fotos_"
+                                            f"{actividad_id}"
+                                        ),
+                                        help=(
+                                            "Las fotografías se comprimen "
+                                            "automáticamente antes de almacenarse."
+                                        )
+                                    )
+
+                                    if archivos_fila:
+
+                                        st.caption(
+                                            f"{len(archivos_fila)} archivo(s) seleccionado(s)."
+                                        )
+
+                            # ---------------------------------
+                            # PROTECCIÓN DE DOBLE REGISTRO
+                            # ---------------------------------
+                            nombres_fila = sorted(
+                                [
+                                    str(
+                                        getattr(
+                                            archivo,
+                                            "name",
+                                            ""
+                                        )
+                                        or ""
+                                    )
+                                    for archivo
+                                    in (
+                                        archivos_fila
+                                        or []
+                                    )
+                                ]
+                            )
+
+                            huella_fila = hashlib.sha256(
+                                "|".join([
+                                    str(
+                                        actividad_id
+                                    ),
+                                    str(
+                                        int(
+                                            avance_nuevo
+                                        )
+                                    ),
+                                    str(
+                                        tipo_evidencia_nuevo
+                                    ),
+                                    str(
+                                        descripcion_nueva
+                                        or ""
+                                    ).strip(),
+                                    ",".join(
+                                        nombres_fila
+                                    )
+                                ]).encode(
+                                    "utf-8"
+                                )
+                            ).hexdigest()
+
+                            clave_guardado_fila = (
+                                "tabla_guardado_huella_"
+                                f"{actividad_id}"
+                            )
+
+                            ya_guardado_fila = (
+                                st.session_state.get(
+                                    clave_guardado_fila
+                                )
+                                == huella_fila
+                            )
+
+                            if ya_guardado_fila:
+
+                                c_guardar.markdown(
+                                    """
+                                    <div style="
+                                        background:#079455;
+                                        color:#fff;
+                                        border-radius:8px;
+                                        text-align:center;
+                                        padding:8px 3px;
+                                        font-weight:800;
+                                        margin-top:2px;
+                                    ">✓</div>
                                     """,
                                     unsafe_allow_html=True
                                 )
 
-                                st.warning(
-                                    "Este registro ya ha sido cargado "
-                                    "recientemente. No se generó un "
-                                    "registro duplicado."
+                                guardar_fila = c_guardar.button(
+                                    "✓",
+                                    key=(
+                                        "tabla_guardar_repetido_"
+                                        f"{actividad_id}"
+                                    ),
+                                    help="Este registro ya fue cargado."
                                 )
 
                             else:
 
-                                evidencias_urls = []
-
-                                if archivos_evidencia:
-
-                                    with st.spinner(
-                                        "Comprimiendo y cargando evidencias..."
-                                    ):
-
-                                        evidencias_urls = subir_evidencias(
-                                            archivos_evidencia,
-                                            ot_seleccionada["ot"],
-                                            actividad["codigo_actividad"],
-                                            tipo_evidencia
-                                        )
-
-                                observaciones_guardar = (
-                                    observaciones.strip()
+                                guardar_fila = c_guardar.button(
+                                    "💾",
+                                    key=(
+                                        "tabla_guardar_"
+                                        f"{actividad_id}"
+                                    ),
+                                    help="Guardar avance de esta actividad.",
+                                    use_container_width=True
                                 )
 
+                            # ---------------------------------
+                            # VER EVIDENCIAS EXISTENTES
+                            # ---------------------------------
+                            registros_actividad = (
+                                df_avances_registro[
+                                    df_avances_registro[
+                                        "actividad_id"
+                                    ].eq(
+                                        actividad_id
+                                    )
+                                ].copy()
                                 if (
-                                    modo_regularizacion
-                                    and fecha_registro_efectiva_utc
-                                    is not None
+                                    not df_avances_registro.empty
+                                    and "actividad_id"
+                                    in df_avances_registro.columns
+                                )
+                                else pd.DataFrame()
+                            )
+
+                            with c_ver:
+
+                                with st.popover(
+                                    "👁"
                                 ):
 
-                                    fecha_carga_real = (
-                                        pd.Timestamp.now(
-                                            tz="America/Lima"
-                                        )
-                                    )
+                                    if registros_actividad.empty:
 
-                                    nota_regularizacion = (
-                                        "[REGULARIZACIÓN DE CORTE] "
-                                        f"Corte: "
-                                        f"{fecha_registro_efectiva_lima:%d/%m/%Y %H:%M} | "
-                                        f"Cargado realmente: "
-                                        f"{fecha_carga_real:%d/%m/%Y %H:%M} | "
-                                        f"Motivo: "
-                                        f"{motivo_regularizacion.strip() or 'Contingencia operativa'}"
-                                    )
-
-                                    observaciones_guardar = (
-                                        (
-                                            observaciones_guardar
-                                            + "\n"
-                                            + nota_regularizacion
-                                        ).strip()
-                                    )
-
-                                payload = {
-                                    "actividad_id": actividad["id"],
-                                    "avance": avance,
-                                    "descripcion_avance": descripcion_avance.strip(),
-                                    "observaciones": observaciones_guardar,
-                                    "tipo_evidencia": tipo_evidencia,
-                                    "critica": critica,
-                                    "evidencias": evidencias_urls,
-                                    "usuario": usuario["username"]
-                                }
-
-                                if (
-                                    modo_regularizacion
-                                    and fecha_registro_efectiva_utc
-                                    is not None
-                                ):
-
-                                    payload["fecha_registro"] = (
-                                        fecha_registro_efectiva_utc.isoformat()
-                                    )
-
-                                (
-                                    supabase
-                                    .table("avances_actividad")
-                                    .insert(payload)
-                                    .execute()
-                                )
-
-                                # Marcar este contenido como guardado.
-                                # El segundo clic quedará bloqueado.
-                                st.session_state[
-                                    clave_huella_guardada
-                                ] = huella_avance_actual
-
-                                # Cambiar inmediatamente el botón a verde.
-                                st.markdown(
-                                    f"""
-                                    <style>
-                                    .st-key-{clave_boton_guardar} button {{
-                                        background:
-                                            linear-gradient(
-                                                135deg,
-                                                #12B76A 0%,
-                                                #079455 100%
-                                            ) !important;
-                                        border-color:
-                                            #079455 !important;
-                                        color:
-                                            #FFFFFF !important;
-                                        box-shadow:
-                                            0 7px 18px
-                                            rgba(
-                                                18,
-                                                183,
-                                                106,
-                                                .22
-                                            ) !important;
-                                    }}
-                                    </style>
-                                    """,
-                                    unsafe_allow_html=True
-                                )
-
-                                if evidencias_urls:
-
-                                    total_original = sum(
-                                        evidencia.get(
-                                            "tamano_original",
-                                            0
-                                        )
-                                        for evidencia
-                                        in evidencias_urls
-                                    )
-
-                                    total_comprimido = sum(
-                                        evidencia.get(
-                                            "tamano_comprimido",
-                                            0
-                                        )
-                                        for evidencia
-                                        in evidencias_urls
-                                    )
-
-                                    ahorro_total = (
-                                        (
-                                            1
-                                            - total_comprimido
-                                            / total_original
-                                        )
-                                        * 100
-                                        if total_original > 0
-                                        else 0
-                                    )
-
-                                    if modo_regularizacion:
-
-                                        st.success(
-                                            "✓ Regularización registrada "
-                                            f"en el corte "
-                                            f"{fecha_registro_efectiva_lima:%d/%m/%Y %H:%M} "
-                                            f"con {len(evidencias_urls)} evidencia(s). "
-                                            "La fecha/hora del corte se mantiene "
-                                            "y solo se actualiza el avance REAL."
+                                        st.caption(
+                                            "Sin registros previos."
                                         )
 
                                     else:
 
-                                        st.success(
-                                            f"✓ Avance registrado correctamente "
-                                            f"con {len(evidencias_urls)} "
-                                            f"evidencia(s). "
-                                            f"Compresión aproximada: "
-                                            f"{ahorro_total:.0f}%. "
-                                            "El registro quedó protegido "
-                                            "contra doble envío."
+                                        registros_actividad = (
+                                            registros_actividad
+                                            .sort_values(
+                                                "fecha_registro",
+                                                ascending=False
+                                            )
                                         )
+
+                                        for _, registro_prev in (
+                                            registros_actividad.head(
+                                                5
+                                            ).iterrows()
+                                        ):
+
+                                            fecha_prev = pd.to_datetime(
+                                                registro_prev.get(
+                                                    "fecha_registro"
+                                                ),
+                                                errors="coerce",
+                                                utc=True
+                                            )
+
+                                            if pd.notna(
+                                                fecha_prev
+                                            ):
+
+                                                fecha_prev = (
+                                                    fecha_prev
+                                                    .tz_convert(
+                                                        "America/Lima"
+                                                    )
+                                                )
+
+                                                texto_fecha_prev = (
+                                                    fecha_prev.strftime(
+                                                        "%d/%m/%Y %H:%M"
+                                                    )
+                                                )
+
+                                            else:
+
+                                                texto_fecha_prev = "-"
+
+                                            st.markdown(
+                                                (
+                                                    f"**{float(registro_prev.get('avance', 0) or 0):.0f}%** "
+                                                    f"· {registro_prev.get('tipo_evidencia', '')} "
+                                                    f"· {texto_fecha_prev}"
+                                                )
+                                            )
+
+                                            descripcion_prev = str(
+                                                registro_prev.get(
+                                                    "descripcion_avance",
+                                                    ""
+                                                )
+                                                or ""
+                                            ).strip()
+
+                                            if descripcion_prev:
+
+                                                st.caption(
+                                                    descripcion_prev
+                                                )
+
+                                            evidencias_prev = (
+                                                registro_prev.get(
+                                                    "evidencias"
+                                                )
+                                                or []
+                                            )
+
+                                            if isinstance(
+                                                evidencias_prev,
+                                                list
+                                            ):
+
+                                                for evidencia_prev in (
+                                                    evidencias_prev[:3]
+                                                ):
+
+                                                    url_prev = (
+                                                        crear_url_firmada_evidencia(
+                                                            evidencia_prev
+                                                        )
+                                                    )
+
+                                                    if url_prev:
+
+                                                        st.image(
+                                                            url_prev,
+                                                            use_container_width=True
+                                                        )
+
+                                            st.divider()
+
+                            # ---------------------------------
+                            # GUARDAR FILA
+                            # ---------------------------------
+                            if guardar_fila:
+
+                                if ya_guardado_fila:
+
+                                    st.warning(
+                                        f"{codigo_actividad}: este registro "
+                                        "ya ha sido cargado y no se duplicó."
+                                    )
+
+                                elif (
+                                    int(
+                                        avance_nuevo
+                                    )
+                                    < avance_actual
+                                ):
+
+                                    st.error(
+                                        f"{codigo_actividad}: el nuevo avance "
+                                        "no puede ser menor al avance actual."
+                                    )
+
+                                elif not str(
+                                    descripcion_nueva
+                                    or ""
+                                ).strip():
+
+                                    st.error(
+                                        f"{codigo_actividad}: ingrese una "
+                                        "descripción breve del avance."
+                                    )
 
                                 else:
 
-                                    if modo_regularizacion:
+                                    try:
 
-                                        st.success(
-                                            "✓ Regularización registrada "
-                                            f"en el corte "
-                                            f"{fecha_registro_efectiva_lima:%d/%m/%Y %H:%M}. "
-                                            "La Curva S recalculará el REAL "
-                                            "de ese corte sin modificar "
-                                            "su fecha ni hora."
+                                        # Comprobación adicional contra BD
+                                        # para dobles clics o latencia.
+                                        consulta_ultimo = (
+                                            supabase
+                                            .table(
+                                                "avances_actividad"
+                                            )
+                                            .select(
+                                                "avance,descripcion_avance,"
+                                                "tipo_evidencia,usuario,"
+                                                "fecha_registro"
+                                            )
+                                            .eq(
+                                                "actividad_id",
+                                                actividad_id
+                                            )
+                                            .eq(
+                                                "usuario",
+                                                usuario[
+                                                    "username"
+                                                ]
+                                            )
+                                            .order(
+                                                "fecha_registro",
+                                                desc=True
+                                            )
+                                            .limit(1)
+                                            .execute()
                                         )
 
-                                    else:
-
-                                        st.success(
-                                            "✓ Avance registrado correctamente. "
-                                            "El registro quedó protegido "
-                                            "contra doble envío."
+                                        ultimo_bd = (
+                                            consulta_ultimo.data
+                                            or []
                                         )
 
-                        except Exception as exc:
+                                        duplicado_bd = False
 
-                            st.error(
-                                f"No fue posible guardar el avance: {exc}"
+                                        if ultimo_bd:
+
+                                            ultimo = ultimo_bd[0]
+
+                                            fecha_ultimo = pd.to_datetime(
+                                                ultimo.get(
+                                                    "fecha_registro"
+                                                ),
+                                                errors="coerce",
+                                                utc=True
+                                            )
+
+                                            reciente = bool(
+                                                pd.notna(
+                                                    fecha_ultimo
+                                                )
+                                                and (
+                                                    pd.Timestamp.now(
+                                                        tz="UTC"
+                                                    )
+                                                    - fecha_ultimo
+                                                )
+                                                <= pd.Timedelta(
+                                                    minutes=5
+                                                )
+                                            )
+
+                                            duplicado_bd = bool(
+                                                reciente
+                                                and int(
+                                                    round(
+                                                        float(
+                                                            ultimo.get(
+                                                                "avance",
+                                                                0
+                                                            )
+                                                            or 0
+                                                        )
+                                                    )
+                                                )
+                                                == int(
+                                                    avance_nuevo
+                                                )
+                                                and str(
+                                                    ultimo.get(
+                                                        "descripcion_avance",
+                                                        ""
+                                                    )
+                                                    or ""
+                                                ).strip()
+                                                == str(
+                                                    descripcion_nueva
+                                                    or ""
+                                                ).strip()
+                                                and str(
+                                                    ultimo.get(
+                                                        "tipo_evidencia",
+                                                        ""
+                                                    )
+                                                    or ""
+                                                )
+                                                == str(
+                                                    tipo_evidencia_nuevo
+                                                )
+                                            )
+
+                                        if duplicado_bd:
+
+                                            st.session_state[
+                                                clave_guardado_fila
+                                            ] = huella_fila
+
+                                            st.warning(
+                                                f"{codigo_actividad}: el registro "
+                                                "ya había sido cargado. "
+                                                "No se creó un duplicado."
+                                            )
+
+                                        else:
+
+                                            evidencias_nuevas = []
+
+                                            if archivos_fila:
+
+                                                with st.spinner(
+                                                    f"Cargando evidencias de "
+                                                    f"{codigo_actividad}..."
+                                                ):
+
+                                                    evidencias_nuevas = subir_evidencias(
+                                                        archivos_fila,
+                                                        ot_texto,
+                                                        codigo_actividad,
+                                                        tipo_evidencia_nuevo
+                                                    )
+
+                                            payload_fila = {
+                                                "actividad_id": actividad_id,
+                                                "avance": float(
+                                                    avance_nuevo
+                                                ),
+                                                "descripcion_avance": str(
+                                                    descripcion_nueva
+                                                    or ""
+                                                ).strip(),
+                                                "observaciones": "",
+                                                "tipo_evidencia": tipo_evidencia_nuevo,
+                                                "critica": bool(
+                                                    fila.get(
+                                                        "critica",
+                                                        False
+                                                    )
+                                                ),
+                                                "evidencias": evidencias_nuevas,
+                                                "usuario": usuario[
+                                                    "username"
+                                                ]
+                                            }
+
+                                            (
+                                                supabase
+                                                .table(
+                                                    "avances_actividad"
+                                                )
+                                                .insert(
+                                                    payload_fila
+                                                )
+                                                .execute()
+                                            )
+
+                                            st.session_state[
+                                                clave_guardado_fila
+                                            ] = huella_fila
+
+                                            st.success(
+                                                f"✓ {codigo_actividad}: avance "
+                                                f"{int(avance_nuevo)}% registrado."
+                                            )
+
+                                            # Refrescar inmediatamente:
+                                            # si llegó al 100%, desaparecerá
+                                            # de la tabla de pendientes.
+                                            time.sleep(
+                                                .35
+                                            )
+
+                                            st.rerun()
+
+                                    except Exception as exc:
+
+                                        st.error(
+                                            f"{codigo_actividad}: no fue posible "
+                                            f"guardar el avance. {exc}"
+                                        )
+
+                            st.markdown(
+                                '<div class="registro-fila-separador"></div>',
+                                unsafe_allow_html=True
                             )
-    
+
     # =====================================================
     # DETALLE POR OT
     # =====================================================
