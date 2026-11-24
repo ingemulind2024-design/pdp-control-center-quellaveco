@@ -2982,22 +2982,8 @@ CORTE_CLIENTE_DATOS = {}
 # =====================================================
 # CORRECCIONES HISTÓRICAS DE CURVA S
 # =====================================================
-# Ajustes solicitados para Instrumentación:
-# 05/10/2026 07:00 -> 51.3%
-# 05/10/2026 14:00 -> 65.2%
-#
-# El consolidado se recalcula con el mismo criterio que
-# ya usa el aplicativo: promedio ponderado por cantidad
-# de actividades de cada área.
-#
-# Electricidad:    164 actividades
-# Instrumentación: 210 actividades
-# Total:           374 actividades
-#
-# Valores resultantes consolidados:
-# 07:00 -> 54.6%
-# 14:00 -> 65.0%
-
+# El servicio inicia sin correcciones históricas manuales.
+# Los valores se calculan con la programación y avances reales.
 CORRECCIONES_CURVA_REAL = {}
 
 
@@ -3457,7 +3443,11 @@ def build_s_curve(
     dia = inicio_programa.normalize()
     dia_final = fin_programa.normalize()
 
-    horas_corte = [0, 7, 14, 19]
+    # El servicio trabaja únicamente en turno día.
+    # Cortes oficiales de control:
+    # - 14:00
+    # - 19:00
+    horas_corte = [14, 19]
 
     while dia <= dia_final:
 
@@ -3482,10 +3472,10 @@ def build_s_curve(
     # =====================================================
     # PUNTO EN VIVO
     # =====================================================
-    # Los cortes oficiales se mantienen en:
-    # 00:00 / 07:00 / 14:00 / 19:00.
+    # Los cortes oficiales del servicio son:
+    # 14:00 / 19:00.
     #
-    # Además agregamos la hora actual mientras la parada
+    # Además agregamos la hora actual mientras el servicio
     # está en ejecución. Esto permite que la curva REAL
     # muestre el avance acumulado registrado hasta este
     # momento, aunque el último reporte haya ocurrido
@@ -13082,7 +13072,7 @@ if rol == "admin":
                 mostrar_titulo_ejecutivo(
                     titulo_curva_admin,
                     (
-                        "Cortes oficiales 00:00 · 07:00 · 14:00 · 19:00, "
+                        "Cortes oficiales 14:00 · 19:00, "
                         "más punto de avance en vivo durante la ejecución."
                     ),
                     "Control de avance"
