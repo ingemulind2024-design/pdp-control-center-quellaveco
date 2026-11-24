@@ -3084,9 +3084,9 @@ CORTE_CLIENTE_DATOS = {}
 # =====================================================
 # CORRECCIONES HISTÓRICAS DE CURVA S
 # =====================================================
-# Valores REAL validados para Gerencia A · Almacenes.
-# Se mantienen las fechas/horas oficiales de corte y
-# únicamente se reemplaza el valor REAL mostrado en Curva S.
+# Valores REAL validados EXCLUSIVAMENTE para Gerencia A · Almacenes.
+# Solo se aplican cuando el dashboard está realmente en GERENCIA_A
+# y existen avances registrados. Gerencia B nunca hereda estos valores.
 CORRECCIONES_CURVA_REAL = {
     "GERENCIA_A": {
         pd.Timestamp("2026-11-21 19:00:00"): 2.2,
@@ -3586,7 +3586,8 @@ def compute_kpis(
 
 def build_s_curve(
     activities: pd.DataFrame,
-    progress: pd.DataFrame
+    progress: pd.DataFrame,
+    vista_servicio: str = None
 ) -> pd.DataFrame:
 
     if activities.empty:
@@ -4036,16 +4037,30 @@ def build_s_curve(
     # Se aplican después del cálculo normal de la curva y
     # antes de devolverla. No se alteran las fechas ni horas
     # de los cortes oficiales.
-    vista_curva = identificar_vista_corte_cliente(
-        activities
-    )
+    # Las correcciones manuales se aplican SOLO cuando
+    # la vista del dashboard indica explícitamente la gerencia.
+    # Nunca se infieren por textos, prefijos o descripciones.
+    vista_curva = str(
+        vista_servicio
+        or ""
+    ).strip().upper()
 
     correcciones_vista = (
         CORRECCIONES_CURVA_REAL.get(
             vista_curva,
             {}
         )
+        if vista_curva
+        else {}
     )
+
+    # Si no existen avances registrados para la vista,
+    # no se inyectan valores manuales. El REAL permanece en 0%.
+    if (
+        progress is None
+        or progress.empty
+    ):
+        correcciones_vista = {}
 
     if correcciones_vista:
 
@@ -13285,9 +13300,27 @@ if rol == "admin":
                     "Control de avance"
                 )
 
+                if area_id_seleccionada_admin is None:
+
+                    vista_servicio_admin = "CONSOLIDADO"
+
+                else:
+
+                    vista_servicio_admin = str(
+                        (
+                            areas_vista_admin[0].get(
+                                "codigo_servicio"
+                            )
+                            if areas_vista_admin
+                            else ""
+                        )
+                        or ""
+                    ).strip().upper()
+
                 curva_admin = build_s_curve(
                     df_actividades_admin,
-                    df_avances_admin
+                    df_avances_admin,
+                    vista_servicio=vista_servicio_admin
                 )
 
                 mostrar_corte_validado_cliente(
@@ -17596,7 +17629,8 @@ else:
 
             curva_s = build_s_curve(
                 df_actividades,
-                df_avances
+                df_avances,
+                vista_servicio=codigo_area
             )
 
             mostrar_corte_validado_cliente(
