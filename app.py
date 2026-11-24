@@ -2982,9 +2982,19 @@ CORTE_CLIENTE_DATOS = {}
 # =====================================================
 # CORRECCIONES HISTÓRICAS DE CURVA S
 # =====================================================
-# El servicio inicia sin correcciones históricas manuales.
-# Los valores se calculan con la programación y avances reales.
-CORRECCIONES_CURVA_REAL = {}
+# Valores REAL validados para Gerencia B · Almacenes.
+# Se mantienen las fechas/horas oficiales de corte y
+# únicamente se reemplaza el valor REAL mostrado en Curva S.
+CORRECCIONES_CURVA_REAL = {
+    "GERENCIA_B": {
+        pd.Timestamp("2026-11-21 19:00:00"): 2.2,
+        pd.Timestamp("2026-11-22 14:00:00"): 5.5,
+        pd.Timestamp("2026-11-22 19:00:00"): 8.4,
+        pd.Timestamp("2026-11-23 14:00:00"): 14.2,
+        pd.Timestamp("2026-11-23 19:00:00"): 18.5,
+        pd.Timestamp("2026-11-24 14:00:00"): 20.0
+    }
+}
 
 
 
