@@ -3002,14 +3002,107 @@ def identificar_vista_corte_cliente(
     activities: pd.DataFrame
 ):
     """
-    Identifica Electricidad, Instrumentación o Consolidado
-    usando el código de actividad del plan cargado.
+    Identifica la gerencia REAL del servicio.
+
+    Prioridad:
+    1. Ubicación/sección de la programación.
+       - ALMACÉN / ALMACENES -> GERENCIA A
+       - ALTA MONTAÑA / VISCACHAS -> GERENCIA B
+    2. Prefijo GA/GB como respaldo.
+
+    Esto corrige cargas históricas de Almacenes que fueron
+    importadas inicialmente con prefijo GB.
     """
     if (
         activities is None
         or activities.empty
-        or "codigo_actividad" not in activities.columns
     ):
+        return None
+
+    # =====================================================
+    # 1. IDENTIFICACIÓN POR UBICACIÓN REAL
+    # =====================================================
+    columnas_ubicacion = [
+        columna
+        for columna in [
+            "seccion",
+            "descripcion_trabajo",
+            "descripcion",
+            "operacion"
+        ]
+        if columna in activities.columns
+    ]
+
+    texto_ubicacion = ""
+
+    if columnas_ubicacion:
+
+        partes = []
+
+        for columna in columnas_ubicacion:
+
+            valores = (
+                activities[columna]
+                .fillna("")
+                .astype(str)
+                .tolist()
+            )
+
+            partes.extend(
+                valores
+            )
+
+        texto_ubicacion = " ".join(
+            partes
+        ).upper()
+
+        texto_ubicacion = (
+            unicodedata
+            .normalize(
+                "NFKD",
+                texto_ubicacion
+            )
+            .encode(
+                "ascii",
+                "ignore"
+            )
+            .decode(
+                "utf-8"
+            )
+        )
+
+    tiene_almacenes = any(
+        palabra in texto_ubicacion
+        for palabra in [
+            "ALMACEN",
+            "ALMACENES"
+        ]
+    )
+
+    tiene_alta_montana = any(
+        palabra in texto_ubicacion
+        for palabra in [
+            "ALTA MONTANA",
+            "VISCACHAS"
+        ]
+    )
+
+    if (
+        tiene_almacenes
+        and tiene_alta_montana
+    ):
+        return "CONSOLIDADO"
+
+    if tiene_almacenes:
+        return "GERENCIA_A"
+
+    if tiene_alta_montana:
+        return "GERENCIA_B"
+
+    # =====================================================
+    # 2. RESPALDO POR PREFIJO DE ACTIVIDAD
+    # =====================================================
+    if "codigo_actividad" not in activities.columns:
         return None
 
     codigos = (
