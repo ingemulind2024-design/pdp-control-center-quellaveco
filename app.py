@@ -2150,11 +2150,14 @@ USUARIOS_LOGIN = [
     "adm_quellaveco"
 ]
 
+# Los usernames internos super_inst/planner_inst se mantienen por
+# compatibilidad con Supabase, pero en pantalla se muestran como
+# accesos eléctricos de Gerencia B.
 ETIQUETAS_USUARIOS_LOGIN = {
-    "super_elec": "super_elec · Supervisor Gerencia A",
-    "super_inst": "super_inst · Supervisor Gerencia B",
-    "planner_elec": "planner_elec · Planner Gerencia A",
-    "planner_inst": "planner_inst · Planner Gerencia B",
+    "super_elec": "super_elec · Supervisor Eléctrico Gerencia A",
+    "super_inst": "super_elec_b · Supervisor Eléctrico Gerencia B",
+    "planner_elec": "planner_elec · Planner Eléctrico Gerencia A",
+    "planner_inst": "planner_elec_b · Planner Eléctrico Gerencia B",
     "adm_quellaveco": "adm_quellaveco · Administrador"
 }
 
@@ -18287,7 +18290,7 @@ else:
             <div class="registro-tabla-ayuda">
                 Cada actividad tiene sus propios controles para registrar el porcentaje,
                 descripción, evidencia fotográfica y guardar el avance.
-                Las actividades culminadas al 100% se ocultan automáticamente.
+                Las actividades al 100% permanecen visibles para mantener el seguimiento.
             </div>
             """,
             unsafe_allow_html=True
@@ -18458,21 +18461,18 @@ else:
                 )
 
                 # =========================================
-                # SOLO PENDIENTES
+                # SEGUIMIENTO COMPLETO
                 # =========================================
+                # Las actividades al 100% permanecen visibles
+                # para mantener trazabilidad y seguimiento.
                 df_actividades_registro = (
-                    df_actividades_registro[
-                        df_actividades_registro[
-                            "avance_actual"
-                        ] < 100
-                    ]
-                    .copy()
+                    df_actividades_registro.copy()
                 )
 
                 if df_actividades_registro.empty:
 
-                    st.success(
-                        "Todas las actividades de esta gerencia están al 100%."
+                    st.info(
+                        "No existen actividades para mostrar."
                     )
 
                 else:
@@ -18728,14 +18728,14 @@ else:
                     )
 
                     st.caption(
-                        f"{len(df_tabla)} actividad(es) pendiente(s). "
+                        f"{len(df_tabla)} actividad(es) en seguimiento. "
                         "Use los filtros para encontrar rápidamente una actividad."
                     )
 
                     if df_tabla.empty:
 
                         st.info(
-                            "No se encontraron actividades pendientes con los filtros seleccionados."
+                            "No se encontraron actividades con los filtros seleccionados."
                         )
 
                     else:
@@ -18842,7 +18842,7 @@ else:
                             "% ACTUAL",
                             "% NUEVO",
                             "DESCRIPCIÓN DEL AVANCE",
-                            "TIPO",
+                            "EVIDENCIA",
                             "FOTO",
                             "GUARDAR",
                             "VER"
@@ -19043,13 +19043,39 @@ else:
                                 unsafe_allow_html=True
                             )
 
+                            # Semáforo visual del avance actual.
+                            if avance_actual >= 100:
+                                color_fondo_avance = "#DCFCE7"
+                                color_borde_avance = "#16A34A"
+                                color_texto_avance = "#166534"
+                            elif avance_actual >= 50:
+                                color_fondo_avance = "#FEF3C7"
+                                color_borde_avance = "#F59E0B"
+                                color_texto_avance = "#92400E"
+                            elif avance_actual > 0:
+                                color_fondo_avance = "#FFEDD5"
+                                color_borde_avance = "#F97316"
+                                color_texto_avance = "#9A3412"
+                            else:
+                                color_fondo_avance = "#FEE2E2"
+                                color_borde_avance = "#EF4444"
+                                color_texto_avance = "#991B1B"
+
                             c_actual.markdown(
-                                (
-                                    '<div class="registro-tabla-dato" '
-                                    'style="text-align:center;font-weight:800;">'
-                                    f"{avance_actual}%"
-                                    "</div>"
-                                ),
+                                f"""
+                                <div style="
+                                    background:{color_fondo_avance};
+                                    border:1.5px solid {color_borde_avance};
+                                    color:{color_texto_avance};
+                                    border-radius:8px;
+                                    text-align:center;
+                                    font-weight:900;
+                                    padding:8px 3px;
+                                    margin-top:1px;
+                                ">
+                                    {avance_actual}%
+                                </div>
+                                """,
                                 unsafe_allow_html=True
                             )
 
@@ -19064,6 +19090,28 @@ else:
                                     f"{actividad_id}"
                                 ),
                                 label_visibility="collapsed"
+                            )
+
+                            if int(avance_nuevo) >= 100:
+                                color_nuevo = "#16A34A"
+                            elif int(avance_nuevo) >= 50:
+                                color_nuevo = "#F59E0B"
+                            elif int(avance_nuevo) > 0:
+                                color_nuevo = "#F97316"
+                            else:
+                                color_nuevo = "#EF4444"
+
+                            c_nuevo.markdown(
+                                f"""
+                                <div style="
+                                    height:4px;
+                                    border-radius:999px;
+                                    background:{color_nuevo};
+                                    margin-top:-4px;
+                                    margin-bottom:2px;
+                                "></div>
+                                """,
+                                unsafe_allow_html=True
                             )
 
                             descripcion_nueva = c_desc.text_area(
@@ -19081,27 +19129,14 @@ else:
 
                             tipo_evidencia_nuevo = c_tipo.selectbox(
                                 "Tipo",
-                                [
-                                    "INICIO",
-                                    "DURANTE",
-                                    "FINAL"
-                                ],
-                                index=(
-                                    0
-                                    if avance_actual <= 0
-                                    else (
-                                        2
-                                        if int(
-                                            avance_nuevo
-                                        ) >= 100
-                                        else 1
-                                    )
-                                ),
+                                ["EVIDENCIA"],
+                                index=0,
                                 key=(
                                     "tabla_tipo_"
                                     f"{actividad_id}"
                                 ),
-                                label_visibility="collapsed"
+                                label_visibility="collapsed",
+                                disabled=True
                             )
 
                             with c_foto:
@@ -19574,9 +19609,9 @@ else:
                                                 f"{int(avance_nuevo)}% registrado."
                                             )
 
-                                            # Refrescar inmediatamente:
-                                            # si llegó al 100%, desaparecerá
-                                            # de la tabla de pendientes.
+                                            # Refrescar inmediatamente para
+                                            # actualizar el porcentaje y su color.
+                                            # Al 100% la actividad permanece visible.
                                             time.sleep(
                                                 .35
                                             )
