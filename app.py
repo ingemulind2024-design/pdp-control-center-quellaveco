@@ -2065,39 +2065,39 @@ AREAS = [
 # MAPEO DEL SERVICIO DE POZOS A TIERRA
 # =====================================================
 # Compatibilidad con la base existente:
-# - ELECTRICIDAD     (ID actual) -> GERENCIA A · ALTA MONTAÑA
-# - INSTRUMENTACION  (ID actual) -> GERENCIA B · ALMACENES
+# - ELECTRICIDAD     (area_id histórico 1) -> GERENCIA B · ALTA MONTAÑA
+# - INSTRUMENTACION  (area_id histórico 2) -> GERENCIA A · ALMACENES
 #
-# Así no es necesario modificar claves foráneas ni usuarios
-# para comenzar a utilizar el servicio.
+# Así se corrige la denominación sin eliminar OTs, actividades,
+# avances, evidencias ni relaciones existentes en Supabase.
 MAPA_GERENCIAS_SERVICIO = {
     "ELECTRICIDAD": {
-        "codigo_servicio": "GERENCIA_A",
-        "nombre": "Gerencia A · Alta Montaña",
-        "hoja": "GERENCIA_A",
-        "empresa": "MAININ",
-        "prefijo": "GA"
-    },
-    "GERENCIA_A": {
-        "codigo_servicio": "GERENCIA_A",
-        "nombre": "Gerencia A · Alta Montaña",
-        "hoja": "GERENCIA_A",
-        "empresa": "MAININ",
-        "prefijo": "GA"
-    },
-    "INSTRUMENTACION": {
         "codigo_servicio": "GERENCIA_B",
-        "nombre": "Gerencia B · Almacenes",
+        "nombre": "Gerencia B · Alta Montaña",
         "hoja": "GERENCIA_B",
         "empresa": "MAININ",
         "prefijo": "GB"
     },
     "GERENCIA_B": {
         "codigo_servicio": "GERENCIA_B",
-        "nombre": "Gerencia B · Almacenes",
+        "nombre": "Gerencia B · Alta Montaña",
         "hoja": "GERENCIA_B",
         "empresa": "MAININ",
         "prefijo": "GB"
+    },
+    "INSTRUMENTACION": {
+        "codigo_servicio": "GERENCIA_A",
+        "nombre": "Gerencia A · Almacenes",
+        "hoja": "GERENCIA_A",
+        "empresa": "MAININ",
+        "prefijo": "GA"
+    },
+    "GERENCIA_A": {
+        "codigo_servicio": "GERENCIA_A",
+        "nombre": "Gerencia A · Almacenes",
+        "hoja": "GERENCIA_A",
+        "empresa": "MAININ",
+        "prefijo": "GA"
     }
 }
 
@@ -2150,14 +2150,14 @@ USUARIOS_LOGIN = [
     "adm_quellaveco"
 ]
 
-# Los usernames internos super_inst/planner_inst se mantienen por
-# compatibilidad con Supabase, pero en pantalla se muestran como
-# accesos eléctricos de Gerencia B.
+# Los usernames internos se conservan por compatibilidad con Supabase.
+# En pantalla se muestran con la gerencia correcta del servicio:
+# Gerencia A = Almacenes / Gerencia B = Alta Montaña.
 ETIQUETAS_USUARIOS_LOGIN = {
-    "super_elec": "super_elec · Supervisor Eléctrico Gerencia A",
-    "super_inst": "super_elec_b · Supervisor Eléctrico Gerencia B",
-    "planner_elec": "planner_elec · Planner Eléctrico Gerencia A",
-    "planner_inst": "planner_elec_b · Planner Eléctrico Gerencia B",
+    "super_elec": "super_elec_b · Supervisor Eléctrico Gerencia B · Alta Montaña",
+    "planner_elec": "planner_elec_b · Planner Eléctrico Gerencia B · Alta Montaña",
+    "super_inst": "super_elec_a · Supervisor Eléctrico Gerencia A · Almacenes",
+    "planner_inst": "planner_elec_a · Planner Eléctrico Gerencia A · Almacenes",
     "adm_quellaveco": "adm_quellaveco · Administrador"
 }
 
@@ -2630,14 +2630,14 @@ def convertir_manpower_quellaveco(archivo_bytes):
             "hoja": "GERENCIA_A",
             "empresa": "MAININ",
             "prefijo": "GA",
-            "nombre": "Gerencia A · Alta Montaña"
+            "nombre": "Gerencia A · Almacenes"
         },
         {
             "clave": "GERENCIA_B",
             "hoja": "GERENCIA_B",
             "empresa": "MAININ",
             "prefijo": "GB",
-            "nombre": "Gerencia B · Almacenes"
+            "nombre": "Gerencia B · Alta Montaña"
         }
     ]
 
@@ -2982,11 +2982,11 @@ CORTE_CLIENTE_DATOS = {}
 # =====================================================
 # CORRECCIONES HISTÓRICAS DE CURVA S
 # =====================================================
-# Valores REAL validados para Gerencia B · Almacenes.
+# Valores REAL validados para Gerencia A · Almacenes.
 # Se mantienen las fechas/horas oficiales de corte y
 # únicamente se reemplaza el valor REAL mostrado en Curva S.
 CORRECCIONES_CURVA_REAL = {
-    "GERENCIA_B": {
+    "GERENCIA_A": {
         pd.Timestamp("2026-11-21 19:00:00"): 2.2,
         pd.Timestamp("2026-11-22 14:00:00"): 5.0,
         pd.Timestamp("2026-11-22 19:00:00"): 7.4,
@@ -3079,8 +3079,8 @@ def mostrar_corte_validado_cliente(
         return
 
     nombre_vista = {
-        "GERENCIA_A": "Gerencia A · Alta Montaña",
-        "GERENCIA_B": "Gerencia B · Almacenes",
+        "GERENCIA_A": "Gerencia A · Almacenes",
+        "GERENCIA_B": "Gerencia B · Alta Montaña",
         "CONSOLIDADO": "Todas las gerencias"
     }.get(
         corte["vista"],
@@ -12521,7 +12521,7 @@ if st.session_state["usuario_logueado"] is None:
                 <div class="login-panel-row">
                     <div>
                         <div class="login-product">Servicio de Pozos a Tierra</div>
-                        <div class="login-location">Gerencia A · Alta Montaña | Gerencia B · Almacenes</div>
+                        <div class="login-location">Gerencia A · Almacenes | Gerencia B · Alta Montaña</div>
                     </div>
                     <div class="login-mini-status">
                         <span>PLAN</span>
@@ -12856,7 +12856,7 @@ if rol == "admin":
             "Programado vs Real, cumplimiento, alertas y desempeño operativo del servicio.",
             icono="◫",
             contexto="ADMIN · CONTROL EJECUTIVO",
-            badge="Gerencia A · Alta Montaña | Gerencia B · Almacenes"
+            badge="Gerencia A · Almacenes | Gerencia B · Alta Montaña"
         )
 
         # =================================================
@@ -16031,13 +16031,13 @@ if rol == "admin":
                                 "hoja": "GERENCIA_A",
                                 "empresa": "MAININ",
                                 "prefijo": "GA",
-                                "nombre": "Gerencia A · Alta Montaña"
+                                "nombre": "Gerencia A · Almacenes"
                             },
                             "GERENCIA_B": {
                                 "hoja": "GERENCIA_B",
                                 "empresa": "MAININ",
                                 "prefijo": "GB",
-                                "nombre": "Gerencia B · Almacenes"
+                                "nombre": "Gerencia B · Alta Montaña"
                             }
                         }
 
@@ -16523,11 +16523,11 @@ if rol == "admin":
             "Cree, revise y mantenga las órdenes de trabajo por gerencia.",
             icono="▤",
             contexto="ADMIN · MAESTRO DE OTs",
-            badge="Gerencia A · Alta Montaña | Gerencia B · Almacenes"
+            badge="Gerencia A · Almacenes | Gerencia B · Alta Montaña"
         )
 
         st.info(
-            "Desde aquí puede crear y revisar las OTs de Gerencia A · Alta Montaña y Gerencia B · Almacenes."
+            "Desde aquí puede crear y revisar las OTs de Gerencia A · Almacenes y Gerencia B · Alta Montaña."
         )
 
 
