@@ -2988,10 +2988,10 @@ CORTE_CLIENTE_DATOS = {}
 CORRECCIONES_CURVA_REAL = {
     "GERENCIA_B": {
         pd.Timestamp("2026-11-21 19:00:00"): 2.2,
-        pd.Timestamp("2026-11-22 14:00:00"): 5.5,
-        pd.Timestamp("2026-11-22 19:00:00"): 8.4,
-        pd.Timestamp("2026-11-23 14:00:00"): 14.2,
-        pd.Timestamp("2026-11-23 19:00:00"): 18.5,
+        pd.Timestamp("2026-11-22 14:00:00"): 5.0,
+        pd.Timestamp("2026-11-22 19:00:00"): 7.4,
+        pd.Timestamp("2026-11-23 14:00:00"): 12.2,
+        pd.Timestamp("2026-11-23 19:00:00"): 16.5,
         pd.Timestamp("2026-11-24 14:00:00"): 20.0
     }
 }
