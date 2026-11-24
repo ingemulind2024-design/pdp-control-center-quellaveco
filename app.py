@@ -2142,6 +2142,75 @@ def codigo_servicio_desde_bd(codigo):
     return codigo_norm
 
 
+
+def normalizar_grupo_servicio(
+    df: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    Corrige el grupo según la ubicación real:
+    - Gerencia A · Almacenes -> GA
+    - Gerencia B · Alta Montaña / Viscachas -> GB
+    """
+    if (
+        df is None
+        or df.empty
+        or "grupo" not in df.columns
+    ):
+        return df
+
+    salida = df.copy()
+
+    columnas_contexto = [
+        columna
+        for columna in [
+            "seccion",
+            "descripcion_trabajo",
+            "descripcion",
+            "operacion"
+        ]
+        if columna in salida.columns
+    ]
+
+    for indice in salida.index:
+
+        contexto = " ".join(
+            str(
+                salida.at[indice, columna]
+                if pd.notna(
+                    salida.at[indice, columna]
+                )
+                else ""
+            )
+            for columna in columnas_contexto
+        ).upper()
+
+        contexto = (
+            unicodedata
+            .normalize(
+                "NFKD",
+                contexto
+            )
+            .encode(
+                "ascii",
+                "ignore"
+            )
+            .decode(
+                "utf-8"
+            )
+        )
+
+        if "ALMACEN" in contexto:
+            salida.at[indice, "grupo"] = "GA"
+
+        elif (
+            "ALTA MONTANA" in contexto
+            or "VISCACHAS" in contexto
+        ):
+            salida.at[indice, "grupo"] = "GB"
+
+    return salida
+
+
 USUARIOS_LOGIN = [
     "super_elec",
     "super_inst",
@@ -2595,6 +2664,39 @@ def convertir_hoja_manpower(
         df_actividades_base[columnas_actividades]
         .reset_index(drop=True)
     )
+
+    nombre_area_norm = str(
+        nombre_area
+        or ""
+    ).upper()
+
+    nombre_area_norm = (
+        unicodedata
+        .normalize(
+            "NFKD",
+            nombre_area_norm
+        )
+        .encode(
+            "ascii",
+            "ignore"
+        )
+        .decode(
+            "utf-8"
+        )
+    )
+
+    if (
+        "GERENCIA A" in nombre_area_norm
+        or "ALMACEN" in nombre_area_norm
+    ):
+        df_actividades["grupo"] = "GA"
+
+    elif (
+        "GERENCIA B" in nombre_area_norm
+        or "ALTA MONTANA" in nombre_area_norm
+        or "VISCACHAS" in nombre_area_norm
+    ):
+        df_actividades["grupo"] = "GB"
 
     inicio_min = df_actividades["inicio_plan"].min()
     fin_max = df_actividades["fin_plan"].max()
@@ -13097,8 +13199,10 @@ if rol == "admin":
                     .execute()
                 ).data or []
 
-                df_actividades_admin = pd.DataFrame(
-                    actividades_admin
+                df_actividades_admin = normalizar_grupo_servicio(
+                    pd.DataFrame(
+                        actividades_admin
+                    )
                 )
 
                 if actividades_admin:
@@ -16987,8 +17091,10 @@ if rol == "admin":
                 else:
 
                     df_actividades_reporte_admin = (
-                        pd.DataFrame(
-                            actividades_reporte_admin
+                        normalizar_grupo_servicio(
+                            pd.DataFrame(
+                                actividades_reporte_admin
+                            )
                         )
                     )
 
@@ -17426,7 +17532,11 @@ else:
             actividades_data = []
 
         df_ots = pd.DataFrame(ots_area)
-        df_actividades = pd.DataFrame(actividades_data)
+        df_actividades = normalizar_grupo_servicio(
+            pd.DataFrame(
+                actividades_data
+            )
+        )
 
         # =================================================
         # 2. CARGAR AVANCES
@@ -18413,7 +18523,7 @@ else:
                     .select(
                         "id,ot_id,codigo_actividad,descripcion,"
                         "descripcion_trabajo,operacion,supervisor,"
-                        "especialidad,grupo,inicio_plan,fin_plan,"
+                        "especialidad,grupo,seccion,inicio_plan,fin_plan,"
                         "duracion_h,personal,hh_plan,critica,activo"
                     )
                     .in_(
@@ -18435,8 +18545,10 @@ else:
 
             else:
 
-                df_actividades_registro = pd.DataFrame(
-                    actividades_registro
+                df_actividades_registro = normalizar_grupo_servicio(
+                    pd.DataFrame(
+                        actividades_registro
+                    )
                 )
 
                 ids_actividades_registro = (
@@ -19962,8 +20074,10 @@ else:
 
             else:
 
-                df_actividades_detalle = pd.DataFrame(
-                    actividades_detalle
+                df_actividades_detalle = normalizar_grupo_servicio(
+                    pd.DataFrame(
+                        actividades_detalle
+                    )
                 )
 
                 # ============================================
@@ -20802,8 +20916,10 @@ else:
                     ots_area
                 )
 
-                df_actividades_reporte = pd.DataFrame(
-                    actividades_reporte
+                df_actividades_reporte = normalizar_grupo_servicio(
+                    pd.DataFrame(
+                        actividades_reporte
+                    )
                 )
 
                 ids_actividades_reporte = (
