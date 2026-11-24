@@ -9,6 +9,7 @@ import unicodedata
 import html
 import tempfile
 import gc
+import httpx
 
 import streamlit as st
 import pandas as pd
@@ -44,7 +45,7 @@ from reportlab.graphics.shapes import (
 from supabase import create_client
 
 st.set_page_config(
-    page_title="PDP Control Center Quellaveco - MAININ",
+    page_title="Servicio de Pozos a Tierra - Quellaveco - MAININ",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="auto"
@@ -798,7 +799,7 @@ def aplicar_estilo_profesional():
 
             /* La cabecera nativa queda como una franja técnica mínima.
                El contenido empieza DESPUÉS de ella para que nunca tape
-               el título de PDP Control Center. */
+               el título de Servicio de Pozos a Tierra. */
             header[data-testid="stHeader"] {
                 display:block !important;
                 height:52px !important;
@@ -1842,7 +1843,7 @@ def mostrar_header_profesional(
         <div class="app-topbar">
             <div class="topbar-left">
                 <div class="topbar-kicker">MAININ · PROJECT DELIVERY PLATFORM</div>
-                <div class="topbar-title">PDP Control Center · Quellaveco</div>
+                <div class="topbar-title">Servicio de Pozos a Tierra · Quellaveco</div>
                 <div class="topbar-subtitle">{subtitulo}</div>
             </div>
             <div class="topbar-context">
@@ -1871,7 +1872,7 @@ def mostrar_titulo_ejecutivo(
         f"""
         <div class="executive-title-row">
             <div>
-                <div class="executive-eyebrow">PDP · QUELLAVECO</div>
+                <div class="executive-eyebrow">SERVICIO · POZOS A TIERRA</div>
                 <div class="executive-title">{titulo}</div>
                 <div class="executive-subtitle">{subtitulo}</div>
             </div>
@@ -1885,7 +1886,7 @@ def mostrar_titulo_ejecutivo(
 
 ICONOS_MENU = {
     "Dashboard general": "◫",
-    "Importar planificación": "⇧",
+    "Importar programación del servicio": "⇧",
     "Administrar OTs": "▤",
     "Reportes": "↗",
     "Dashboard": "◫",
@@ -1911,7 +1912,7 @@ def mostrar_acceso_pagina(
     titulo,
     subtitulo="",
     icono="◫",
-    contexto="PDP · QUELLAVECO",
+    contexto="SERVICIO · POZOS A TIERRA",
     badge=""
 ):
     badge_html = (
@@ -2056,9 +2057,89 @@ supabase_admin = conectar_supabase_admin()
 # =====================================================
 
 AREAS = [
-    "ELECTRICIDAD",
-    "INSTRUMENTACION"
+    "GERENCIA_A",
+    "GERENCIA_B"
 ]
+
+# =====================================================
+# MAPEO DEL SERVICIO DE POZOS A TIERRA
+# =====================================================
+# Compatibilidad con la base existente:
+# - ELECTRICIDAD     (ID actual) -> GERENCIA A · ALTA MONTAÑA
+# - INSTRUMENTACION  (ID actual) -> GERENCIA B · ALMACENES
+#
+# Así no es necesario modificar claves foráneas ni usuarios
+# para comenzar a utilizar el servicio.
+MAPA_GERENCIAS_SERVICIO = {
+    "ELECTRICIDAD": {
+        "codigo_servicio": "GERENCIA_A",
+        "nombre": "Gerencia A · Alta Montaña",
+        "hoja": "GERENCIA_A",
+        "empresa": "MAININ",
+        "prefijo": "GA"
+    },
+    "GERENCIA_A": {
+        "codigo_servicio": "GERENCIA_A",
+        "nombre": "Gerencia A · Alta Montaña",
+        "hoja": "GERENCIA_A",
+        "empresa": "MAININ",
+        "prefijo": "GA"
+    },
+    "INSTRUMENTACION": {
+        "codigo_servicio": "GERENCIA_B",
+        "nombre": "Gerencia B · Almacenes",
+        "hoja": "GERENCIA_B",
+        "empresa": "MAININ",
+        "prefijo": "GB"
+    },
+    "GERENCIA_B": {
+        "codigo_servicio": "GERENCIA_B",
+        "nombre": "Gerencia B · Almacenes",
+        "hoja": "GERENCIA_B",
+        "empresa": "MAININ",
+        "prefijo": "GB"
+    }
+}
+
+
+def adaptar_area_servicio(area):
+    """Devuelve el área con el nombre visible del servicio."""
+    if not area:
+        return area
+
+    salida = dict(area)
+
+    codigo_original = str(
+        salida.get("codigo")
+        or ""
+    ).strip().upper()
+
+    config = MAPA_GERENCIAS_SERVICIO.get(
+        codigo_original
+    )
+
+    if config:
+        salida["codigo_original"] = codigo_original
+        salida["codigo_servicio"] = config["codigo_servicio"]
+        salida["nombre"] = config["nombre"]
+
+    return salida
+
+
+def codigo_servicio_desde_bd(codigo):
+    codigo_norm = str(
+        codigo
+        or ""
+    ).strip().upper()
+
+    config = MAPA_GERENCIAS_SERVICIO.get(
+        codigo_norm
+    )
+
+    if config:
+        return config["codigo_servicio"]
+
+    return codigo_norm
 
 
 USUARIOS_LOGIN = [
@@ -2070,10 +2151,10 @@ USUARIOS_LOGIN = [
 ]
 
 ETIQUETAS_USUARIOS_LOGIN = {
-    "super_elec": "super_elec · Supervisor Electricidad",
-    "super_inst": "super_inst · Supervisor Instrumentación",
-    "planner_elec": "planner_elec · Planner Electricidad",
-    "planner_inst": "planner_inst · Planner Instrumentación",
+    "super_elec": "super_elec · Supervisor Gerencia A",
+    "super_inst": "super_inst · Supervisor Gerencia B",
+    "planner_elec": "planner_elec · Planner Gerencia A",
+    "planner_inst": "planner_inst · Planner Gerencia B",
     "adm_quellaveco": "adm_quellaveco · Administrador"
 }
 
@@ -2226,8 +2307,8 @@ def convertir_hoja_manpower(
     nombre_area
 ):
     """
-    Convierte directamente una hoja ELEC/INST del manpower de Quellaveco
-    al formato interno que utiliza el importador PDP.
+    Convierte directamente una hoja GERENCIA_A/GERENCIA_B del servicio de pozos a tierra
+    al formato interno que utiliza el importador del servicio.
 
     Conserva explícitamente:
     - DESCRIPCION TRABAJO -> descripcion_trabajo
@@ -2535,25 +2616,25 @@ def convertir_hoja_manpower(
     }
 
 def convertir_manpower_quellaveco(archivo_bytes):
-    """Convierte ELEC e INST en una sola carga del manpower fuente."""
+    """Convierte Gerencia A y Gerencia B del servicio de pozos a tierra."""
 
     libro = pd.ExcelFile(io.BytesIO(archivo_bytes))
     hojas = set(libro.sheet_names)
 
     configuraciones = [
         {
-            "clave": "ELECTRICIDAD",
-            "hoja": "ELEC",
-            "empresa": "MAININ ELE",
-            "prefijo": "ELEC",
-            "nombre": "Electricidad"
+            "clave": "GERENCIA_A",
+            "hoja": "GERENCIA_A",
+            "empresa": "MAININ",
+            "prefijo": "GA",
+            "nombre": "Gerencia A · Alta Montaña"
         },
         {
-            "clave": "INSTRUMENTACION",
-            "hoja": "INST",
-            "empresa": "MAININ INS",
-            "prefijo": "INST",
-            "nombre": "Instrumentación"
+            "clave": "GERENCIA_B",
+            "hoja": "GERENCIA_B",
+            "empresa": "MAININ",
+            "prefijo": "GB",
+            "nombre": "Gerencia B · Almacenes"
         }
     ]
 
@@ -2892,47 +2973,8 @@ CORTE_CLIENTE_FECHA = pd.Timestamp(
     "2026-10-05 19:00:00"
 )
 
-CORTE_CLIENTE_DATOS = {
-    "ELECTRICIDAD": {
-        "plan": 100.0,
-        "real": 88.1,
-        "desviacion": -11.9,
-        "spi": 0.88,
-        "ots": 101,
-        "actividades": 164,
-        "culminadas": 142,
-        "en_ejecucion": 9,
-        "no_iniciadas": 13,
-        "hh_plan": 1502,
-        "hh_ganadas": 1260
-    },
-    "INSTRUMENTACION": {
-        "plan": 100.0,
-        "real": 89.7,
-        "desviacion": -10.3,
-        "spi": 0.90,
-        "ots": 160,
-        "actividades": 210,
-        "culminadas": 181,
-        "en_ejecucion": 17,
-        "no_iniciadas": 12,
-        "hh_plan": 1520,
-        "hh_ganadas": 1404
-    },
-    "CONSOLIDADO": {
-        "plan": 100.0,
-        "real": 89.0,
-        "desviacion": -11.0,
-        "spi": 0.89,
-        "ots": 261,
-        "actividades": 374,
-        "culminadas": 323,
-        "en_ejecucion": 26,
-        "no_iniciadas": 25,
-        "hh_plan": 3022,
-        "hh_ganadas": 2664
-    }
-}
+CORTE_CLIENTE_DATOS = {}
+
 
 # =====================================================
 # CORRECCIONES HISTÓRICAS DE CURVA S
@@ -2953,16 +2995,8 @@ CORTE_CLIENTE_DATOS = {
 # 07:00 -> 54.6%
 # 14:00 -> 65.0%
 
-CORRECCIONES_CURVA_REAL = {
-    "INSTRUMENTACION": {
-        pd.Timestamp("2026-10-05 07:00:00"): 51.3,
-        pd.Timestamp("2026-10-05 14:00:00"): 65.2
-    },
-    "CONSOLIDADO": {
-        pd.Timestamp("2026-10-05 07:00:00"): 54.6,
-        pd.Timestamp("2026-10-05 14:00:00"): 65.0
-    }
-}
+CORRECCIONES_CURVA_REAL = {}
+
 
 
 def identificar_vista_corte_cliente(
@@ -2987,22 +3021,22 @@ def identificar_vista_corte_cliente(
         .str.upper()
     )
 
-    tiene_elec = codigos.str.startswith(
-        "ELEC"
+    tiene_ga = codigos.str.startswith(
+        "GA"
     ).any()
 
-    tiene_inst = codigos.str.startswith(
-        "INST"
+    tiene_gb = codigos.str.startswith(
+        "GB"
     ).any()
 
-    if tiene_elec and tiene_inst:
+    if tiene_ga and tiene_gb:
         return "CONSOLIDADO"
 
-    if tiene_elec:
-        return "ELECTRICIDAD"
+    if tiene_ga:
+        return "GERENCIA_A"
 
-    if tiene_inst:
-        return "INSTRUMENTACION"
+    if tiene_gb:
+        return "GERENCIA_B"
 
     return None
 
@@ -3046,9 +3080,9 @@ def mostrar_corte_validado_cliente(
         return
 
     nombre_vista = {
-        "ELECTRICIDAD": "Electricidad",
-        "INSTRUMENTACION": "Instrumentación",
-        "CONSOLIDADO": "Todas las áreas"
+        "GERENCIA_A": "Gerencia A · Alta Montaña",
+        "GERENCIA_B": "Gerencia B · Almacenes",
+        "CONSOLIDADO": "Todas las gerencias"
     }.get(
         corte["vista"],
         corte["vista"]
@@ -5484,7 +5518,7 @@ def construir_pdf_ejecutivo_area(
 
     story.append(
         Paragraph(
-            "PDP CONTROL CENTER QUELLAVECO - MAININ",
+            "SERVICIO DE POZOS A TIERRA · QUELLAVECO - MAININ",
             estilo_titulo
         )
     )
@@ -6483,7 +6517,7 @@ def construir_pdf_supervisor(
 
     story.append(
         Paragraph(
-            "PDP CONTROL CENTER QUELLAVECO - MAININ",
+            "SERVICIO DE POZOS A TIERRA · QUELLAVECO - MAININ",
             estilo_titulo
         )
     )
@@ -7105,7 +7139,7 @@ def construir_pdf_supervisor(
 
     story.append(
         Paragraph(
-            "MAININ - PDP Control Center Quellaveco",
+            "MAININ - Servicio de Pozos a Tierra Quellaveco",
             estilo_subtitulo
         )
     )
@@ -7783,7 +7817,7 @@ def construir_pdf_fotografico_ot(
 
     story.append(
         Paragraph(
-            "MAININ · PDP CONTROL CENTER QUELLAVECO",
+            "MAININ · SERVICIO DE POZOS A TIERRA · QUELLAVECO",
             estilo_titulo
         )
     )
@@ -8405,7 +8439,7 @@ def construir_pdf_fotografico_ot(
 
     story.append(
         Paragraph(
-            "MAININ · Informe generado desde PDP Control Center Quellaveco",
+            "MAININ · Informe generado desde Servicio de Pozos a Tierra Quellaveco",
             estilo_sub
         )
     )
@@ -8705,7 +8739,7 @@ def construir_pdf_fotografico_multiple(
     # --------------------------------------------------------
     story.append(
         Paragraph(
-            "MAININ · PDP CONTROL CENTER QUELLAVECO",
+            "MAININ · SERVICIO DE POZOS A TIERRA · QUELLAVECO",
             estilo_titulo
         )
     )
@@ -9708,7 +9742,7 @@ def construir_pdf_fotografico_multiple(
 
     story.append(
         Paragraph(
-            "MAININ · Informe generado desde PDP Control Center Quellaveco",
+            "MAININ · Informe generado desde Servicio de Pozos a Tierra Quellaveco",
             estilo_sub
         )
     )
@@ -11953,7 +11987,7 @@ def mostrar_logo_mainin_sidebar():
                 <div class="brand-mark">M</div>
                 <div class="brand-copy">
                     <div class="brand-name">MAININ</div>
-                    <div class="brand-product">PDP · Quellaveco</div>
+                    <div class="brand-product">Servicio · Pozos a Tierra</div>
                 </div>
             </div>
             """,
@@ -12270,26 +12304,105 @@ def eliminar_sesion_persistente():
         pass
 
 
+class ErrorConexionSupabase(Exception):
+    """Error controlado cuando Supabase no responde."""
+    pass
+
+
 def obtener_usuario(username):
-    resultado = (
-        supabase
-        .table("usuarios_app")
-        .select(
-            "id,username,nombre,rol,area_id,activo,password_hash,"
-            "areas(id,codigo,nombre)"
-        )
-        .eq("username", username)
-        .eq("activo", True)
-        .limit(1)
-        .execute()
-    )
+    """
+    Consulta el usuario con reintentos automáticos.
 
-    datos = resultado.data or []
+    Si Supabase tiene una caída/intermitencia de red:
+    - reintenta 3 veces;
+    - crea un cliente fresco en los reintentos;
+    - evita mostrar el traceback técnico al usuario.
+    """
 
-    if not datos:
-        return None
+    ultimo_error = None
 
-    return datos[0]
+    for intento in range(1, 4):
+
+        try:
+
+            cliente = supabase
+
+            if intento > 1:
+                cliente = create_client(
+                    st.secrets["SUPABASE_URL"],
+                    st.secrets["SUPABASE_ADMIN_KEY"]
+                )
+
+            resultado = (
+                cliente
+                .table("usuarios_app")
+                .select(
+                    "id,username,nombre,rol,area_id,activo,password_hash,"
+                    "areas(id,codigo,nombre)"
+                )
+                .eq("username", username)
+                .eq("activo", True)
+                .limit(1)
+                .execute()
+            )
+
+            datos = resultado.data or []
+
+            if not datos:
+                return None
+
+            return datos[0]
+
+        except (
+            httpx.ConnectError,
+            httpx.ConnectTimeout,
+            httpx.ReadTimeout,
+            httpx.RemoteProtocolError,
+            httpx.NetworkError
+        ) as exc:
+
+            ultimo_error = exc
+
+            if intento < 3:
+                time.sleep(
+                    0.7 * intento
+                )
+                continue
+
+        except Exception as exc:
+
+            # Algunos errores de transporte de PostgREST/Supabase
+            # llegan envueltos y no conservan el tipo httpx.
+            mensaje = str(exc).lower()
+
+            es_error_red = any(
+                texto in mensaje
+                for texto in [
+                    "connecterror",
+                    "connection",
+                    "timed out",
+                    "timeout",
+                    "temporary failure",
+                    "name resolution",
+                    "network"
+                ]
+            )
+
+            if not es_error_red:
+                raise
+
+            ultimo_error = exc
+
+            if intento < 3:
+                time.sleep(
+                    0.7 * intento
+                )
+                continue
+
+    raise ErrorConexionSupabase(
+        "No fue posible establecer conexión con Supabase "
+        "después de varios intentos."
+    ) from ultimo_error
 
 
 if "usuario_logueado" not in st.session_state:
@@ -12317,9 +12430,21 @@ if (
 
         if username_guardado:
 
-            usuario_guardado = obtener_usuario(
-                username_guardado
-            )
+            try:
+
+                usuario_guardado = obtener_usuario(
+                    username_guardado
+                )
+
+            except ErrorConexionSupabase:
+
+                # No eliminamos la cookie porque el problema
+                # puede ser únicamente una caída momentánea.
+                usuario_guardado = None
+
+                st.session_state[
+                    "supabase_conexion_temporal"
+                ] = True
 
             if usuario_guardado is not None:
 
@@ -12346,10 +12471,17 @@ if (
                         "usuario_logueado"
                     ] = usuario_guardado
 
+                    st.session_state[
+                        "supabase_conexion_temporal"
+                    ] = False
+
                 else:
                     eliminar_sesion_persistente()
 
-            else:
+            elif not st.session_state.get(
+                "supabase_conexion_temporal",
+                False
+            ):
                 eliminar_sesion_persistente()
 
         else:
@@ -12385,8 +12517,8 @@ if st.session_state["usuario_logueado"] is None:
             <div class="login-panel">
                 <div class="login-panel-row">
                     <div>
-                        <div class="login-product">PDP Control Center</div>
-                        <div class="login-location">Electricidad · Instrumentación</div>
+                        <div class="login-product">Servicio de Pozos a Tierra</div>
+                        <div class="login-location">Gerencia A · Alta Montaña | Gerencia B · Almacenes</div>
                     </div>
                     <div class="login-mini-status">
                         <span>PLAN</span>
@@ -12409,6 +12541,17 @@ if st.session_state["usuario_logueado"] is None:
             """,
             unsafe_allow_html=True
         )
+
+        if st.session_state.get(
+            "supabase_conexion_temporal",
+            False
+        ):
+
+            st.warning(
+                "La conexión con la base de datos está inestable. "
+                "Puede intentar ingresar nuevamente; el aplicativo "
+                "reintentará la conexión automáticamente."
+            )
 
         username = st.selectbox(
             "Usuario",
@@ -12447,18 +12590,50 @@ if st.session_state["usuario_logueado"] is None:
             use_container_width=True
         ):
 
+            error_conexion_login = False
+
             if not username:
                 st.warning(
                     "Seleccione un usuario antes de ingresar."
                 )
                 usuario = None
+
             else:
-                usuario = obtener_usuario(
-                    str(username).strip()
-                )
+
+                with st.spinner(
+                    "Validando acceso..."
+                ):
+
+                    try:
+
+                        usuario = obtener_usuario(
+                            str(username).strip()
+                        )
+
+                        st.session_state[
+                            "supabase_conexion_temporal"
+                        ] = False
+
+                    except ErrorConexionSupabase:
+
+                        usuario = None
+                        error_conexion_login = True
+
+                        st.session_state[
+                            "supabase_conexion_temporal"
+                        ] = True
 
             if not username:
                 pass
+
+            elif error_conexion_login:
+
+                st.error(
+                    "No se pudo conectar con la base de datos en este momento. "
+                    "No es un error de su usuario ni contraseña. "
+                    "Espere unos segundos y vuelva a presionar "
+                    "'Ingresar al Control Center'."
+                )
 
             elif usuario is None:
                 st.error("Usuario no encontrado o inactivo.")
@@ -12550,9 +12725,17 @@ area_info = usuario.get("areas")
 
 if rol == "admin":
     codigo_area = "TODAS"
-    nombre_area = "Todas las áreas"
+    nombre_area = "Todas las gerencias"
 else:
-    codigo_area = area_info["codigo"]
+    area_info = adaptar_area_servicio(
+        area_info
+    )
+    codigo_area = (
+        area_info.get("codigo_servicio")
+        or codigo_servicio_desde_bd(
+            area_info.get("codigo")
+        )
+    )
     nombre_area = area_info["nombre"]
 
 
@@ -12575,7 +12758,7 @@ with st.sidebar:
     )
 
     area_sidebar = (
-        "TODAS LAS ÁREAS"
+        "TODAS LAS GERENCIAS"
         if rol == "admin"
         else nombre_area
     )
@@ -12625,7 +12808,7 @@ with st.sidebar:
 # =====================================================
 
 mostrar_header_profesional(
-    subtitulo="Seguimiento ejecutivo y operativo de la parada de planta",
+    subtitulo="Seguimiento ejecutivo y operativo del servicio de pozos a tierra",
     estado=nombre_area,
     rol=nombre_rol_sidebar,
     area=area_sidebar
@@ -12650,7 +12833,7 @@ if rol == "admin":
             "Menú administrador",
             [
                 "Dashboard general",
-                "Importar planificación",
+                "Importar programación del servicio",
                 "Administrar OTs",
                 "Reportes"
             ],
@@ -12666,11 +12849,11 @@ if rol == "admin":
     if pagina_admin == "Dashboard general":
 
         mostrar_acceso_pagina(
-            "Dashboard Ejecutivo de Parada",
-            "PLAN vs REAL, cumplimiento, alertas y desempeño operativo.",
+            "Dashboard Ejecutivo del Servicio",
+            "Programado vs Real, cumplimiento, alertas y desempeño operativo del servicio.",
             icono="◫",
             contexto="ADMIN · CONTROL EJECUTIVO",
-            badge="Electricidad · Instrumentación"
+            badge="Gerencia A · Alta Montaña | Gerencia B · Almacenes"
         )
 
         # =================================================
@@ -12686,15 +12869,18 @@ if rol == "admin":
             .execute()
         )
 
-        areas_admin = (
-            resultado_areas_admin.data
-            or []
-        )
+        areas_admin = [
+            adaptar_area_servicio(area)
+            for area in (
+                resultado_areas_admin.data
+                or []
+            )
+        ]
 
         if not areas_admin:
 
             st.warning(
-                "No existen áreas activas configuradas."
+                "No existen gerencias activas configuradas."
             )
 
         else:
@@ -12704,7 +12890,7 @@ if rol == "admin":
             # =============================================
 
             mapa_vistas_admin = {
-                "Todas las áreas": None
+                "Todas las gerencias": None
             }
 
             for area in areas_admin:
@@ -12729,7 +12915,7 @@ if rol == "admin":
                 areas_vista_admin = areas_admin
 
                 st.info(
-                    "Vista actual: TODAS LAS ÁREAS"
+                    "Vista actual: TODAS LAS GERENCIAS"
                 )
 
             else:
@@ -14638,7 +14824,7 @@ if rol == "admin":
 
                     def clasificar_alerta_admin(fila):
                         """
-                        Semaforización PDP:
+                        Semaforización del servicio:
                         - Verde: desviación >= -5 pp
                         - Amarillo: entre -5 y -10 pp
                         - Naranja: entre -10 y -20 pp
@@ -15734,14 +15920,14 @@ if rol == "admin":
     # IMPORTAR PLANIFICACIÓN
     # =====================================================
 
-    elif pagina_admin == "Importar planificación":
+    elif pagina_admin == "Importar programación del servicio":
 
         mostrar_acceso_pagina(
-            "Importar planificación",
-            "Convierta y cargue el manpower de la parada en un solo flujo.",
+            "Importar programación del servicio",
+            "Convierta y cargue el manpower del servicio en un solo flujo.",
             icono="⇧",
             contexto="ADMIN · PLANIFICACIÓN",
-            badge="Excel → PDP"
+            badge="Excel → Servicio"
         )
 
         st.info(
@@ -15759,7 +15945,13 @@ if rol == "admin":
             .execute()
         )
 
-        areas_disponibles = resultado_areas.data or []
+        areas_disponibles = [
+            adaptar_area_servicio(area)
+            for area in (
+                resultado_areas.data
+                or []
+            )
+        ]
 
         mapa_areas = {
             f"{area['codigo']} - {area['nombre']}": area
@@ -15769,28 +15961,35 @@ if rol == "admin":
         if not mapa_areas:
 
             st.error(
-                "No existen áreas disponibles en la base de datos."
+                "No existen gerencias disponibles en la base de datos."
             )
 
         else:
 
             area_texto = st.selectbox(
-                "Seleccione el área que desea reemplazar",
+                "Seleccione la gerencia que desea reemplazar",
                 list(mapa_areas.keys())
             )
 
             area_seleccionada = mapa_areas[area_texto]
-            codigo_area_import = str(
+            codigo_area_import_bd = str(
                 area_seleccionada.get("codigo") or ""
             ).strip().upper()
 
+            codigo_area_import = (
+                area_seleccionada.get("codigo_servicio")
+                or codigo_servicio_desde_bd(
+                    codigo_area_import_bd
+                )
+            )
+
             st.warning(
-                f"La carga reemplazará únicamente la planificación de "
+                f"La carga reemplazará únicamente la programación del servicio de "
                 f"{area_seleccionada['nombre']}."
             )
 
             archivo = st.file_uploader(
-                "Suba el Excel original de manpower o el formato PDP",
+                "Suba el Excel original del servicio o el formato del aplicativo",
                 type=["xlsx"],
                 key=f"importacion_plan_{codigo_area_import}"
             )
@@ -15811,7 +16010,7 @@ if rol == "admin":
                     # DETECCIÓN AUTOMÁTICA DE FORMATO
                     # ==========================================
                     if {"OTs", "Actividades"}.issubset(hojas_archivo):
-                        formato_detectado = "FORMATO PDP"
+                        formato_detectado = "FORMATO DEL APLICATIVO"
 
                         df_ots = pd.read_excel(
                             io.BytesIO(archivo_bytes),
@@ -15825,17 +16024,17 @@ if rol == "admin":
 
                     else:
                         configuracion_manpower = {
-                            "ELECTRICIDAD": {
-                                "hoja": "ELEC",
-                                "empresa": "MAININ ELE",
-                                "prefijo": "ELEC",
-                                "nombre": "Electricidad"
+                            "GERENCIA_A": {
+                                "hoja": "GERENCIA_A",
+                                "empresa": "MAININ",
+                                "prefijo": "GA",
+                                "nombre": "Gerencia A · Alta Montaña"
                             },
-                            "INSTRUMENTACION": {
-                                "hoja": "INST",
-                                "empresa": "MAININ INS",
-                                "prefijo": "INST",
-                                "nombre": "Instrumentación"
+                            "GERENCIA_B": {
+                                "hoja": "GERENCIA_B",
+                                "empresa": "MAININ",
+                                "prefijo": "GB",
+                                "nombre": "Gerencia B · Almacenes"
                             }
                         }
 
@@ -16287,7 +16486,7 @@ if rol == "admin":
                             )
 
                             st.success(
-                                f"Planificación de "
+                                f"Programación del servicio de "
                                 f"{area_seleccionada['nombre']} "
                                 f"actualizada correctamente: "
                                 f"{len(ots_limpias)} OTs y "
@@ -16300,7 +16499,7 @@ if rol == "admin":
 
                         except Exception as import_error:
                             st.error(
-                                "No fue posible importar la planificación: "
+                                "No fue posible importar la programación del servicio: "
                                 f"{import_error}"
                             )
 
@@ -16318,14 +16517,14 @@ if rol == "admin":
 
         mostrar_acceso_pagina(
             "Administrar OTs",
-            "Cree, revise y mantenga las órdenes de trabajo por área.",
+            "Cree, revise y mantenga las órdenes de trabajo por gerencia.",
             icono="▤",
             contexto="ADMIN · MAESTRO DE OTs",
-            badge="Electricidad · Instrumentación"
+            badge="Gerencia A · Alta Montaña | Gerencia B · Almacenes"
         )
 
         st.info(
-            "Desde aquí puede crear y revisar las OTs de Electricidad e Instrumentación."
+            "Desde aquí puede crear y revisar las OTs de Gerencia A · Alta Montaña y Gerencia B · Almacenes."
         )
 
 
@@ -16343,7 +16542,13 @@ if rol == "admin":
                 .execute()
             )
 
-            areas_ot = resultado_areas_ot.data or []
+            areas_ot = [
+                adaptar_area_servicio(area)
+                for area in (
+                    resultado_areas_ot.data
+                    or []
+                )
+            ]
 
         except Exception as e:
             st.error(f"Error al cargar las áreas: {e}")
@@ -16351,7 +16556,7 @@ if rol == "admin":
 
         if not areas_ot:
 
-            st.warning("No existen áreas activas configuradas.")
+            st.warning("No existen gerencias activas configuradas.")
 
         else:
 
@@ -16541,21 +16746,24 @@ if rol == "admin":
             .execute()
         )
 
-        areas_reporte_admin = (
-            resultado_areas_reporte_admin.data
-            or []
-        )
+        areas_reporte_admin = [
+            adaptar_area_servicio(area)
+            for area in (
+                resultado_areas_reporte_admin.data
+                or []
+            )
+        ]
 
         if not areas_reporte_admin:
 
             st.warning(
-                "No existen áreas activas configuradas."
+                "No existen gerencias activas configuradas."
             )
 
         else:
 
             opciones_reporte_admin = {
-                "Todas las áreas": None
+                "Todas las gerencias": None
             }
 
             for area in areas_reporte_admin:
@@ -16972,7 +17180,7 @@ if rol == "admin":
                                 "Descargar PDF del supervisor",
                                 data=pdf_sup_admin,
                                 file_name=(
-                                    "PDP_Quellaveco_"
+                                    "Servicio_Pozos_Tierra_Quellaveco_"
                                     f"{str(codigo_reporte_admin).lower()}_"
                                     f"{archivo_sup_admin}_"
                                     f"{datetime.now():%Y%m%d_%H%M}.pdf"
@@ -17019,7 +17227,7 @@ if rol == "admin":
                             "Descargar informe gerencial PDF",
                             data=pdf_admin_bytes,
                             file_name=(
-                                "PDP_Quellaveco_"
+                                "Servicio_Pozos_Tierra_Quellaveco_"
                                 f"{str(codigo_reporte_admin).lower()}_"
                                 f"{datetime.now():%Y%m%d_%H%M}.pdf"
                             ),
@@ -20727,7 +20935,7 @@ else:
                             "Descargar PDF del supervisor",
                             data=pdf_supervisor,
                             file_name=(
-                                "PDP_Quellaveco_"
+                                "Servicio_Pozos_Tierra_Quellaveco_"
                                 f"{codigo_area.lower()}_"
                                 f"{nombre_archivo_supervisor}_"
                                 f"{datetime.now():%Y%m%d_%H%M}.pdf"
@@ -20771,7 +20979,7 @@ else:
                         "Descargar reporte ejecutivo PDF",
                         data=pdf_bytes,
                         file_name=(
-                            f"PDP_Quellaveco_"
+                            f"Servicio_Pozos_Tierra_Quellaveco_"
                             f"{codigo_area.lower()}_"
                             f"{datetime.now():%Y%m%d_%H%M}.pdf"
                         ),
@@ -20873,7 +21081,7 @@ else:
                     "Descargar reporte completo en Excel",
                     data=buffer_reporte_excel.getvalue(),
                     file_name=(
-                        f"PDP_Quellaveco_"
+                        f"Servicio_Pozos_Tierra_Quellaveco_"
                         f"{codigo_area.lower()}_"
                         f"{datetime.now():%Y%m%d_%H%M}.xlsx"
                     ),
